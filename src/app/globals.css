@@ -45,6 +45,19 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --font-sans: var(--font-inter), system-ui, sans-serif;
   --font-display: var(--font-space-grotesk), system-ui, sans-serif;
+
+  /* LeadRadar marketing tokens */
+  --color-lr-indigo: #4338CA;
+  --color-lr-blue: #3B82F6;
+  --color-lr-cyan: #06B6D4;
+  --color-lr-emerald: #10B981;
+  --color-lr-red: #EF4444;
+  --color-lr-amber: #F59E0B;
+  --radius-lr-sm: 8px;
+  --radius-lr-md: 12px;
+  --radius-lr-lg: 16px;
+  --radius-lr-xl: 22px;
+  --radius-lr-2xl: 28px;
 }
 
 :root {

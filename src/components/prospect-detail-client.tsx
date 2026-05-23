@@ -20,12 +20,11 @@ interface ProspectDetailClientProps {
 }
 
 export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [subject, setSubject] = useState<string | null>(null);
   const [body, setBody] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [usedFallback, setUsedFallback] = useState(false);
   const [copied, setCopied] = useState<"subject" | "body" | "full" | null>(null);
 
   useEffect(() => {
@@ -34,12 +33,11 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/prospects/${prospect.id}/pitch-email`);
+        const res = await fetch(`/api/prospects/${prospect.id}/pitch-email?language=${locale}`);
         const data = (await res.json()) as {
           subject?: string;
           body?: string;
           error?: string;
-          fallback?: boolean;
         };
         if (cancelled) return;
         if (!res.ok) {
@@ -50,7 +48,6 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
         }
         setSubject(data.subject ?? null);
         setBody(data.body ?? null);
-        setUsedFallback(Boolean(data.fallback));
       } catch {
         if (!cancelled) setError(t("common.networkError"));
       } finally {
@@ -61,7 +58,7 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [prospect.id]);
+  }, [prospect.id, locale, t]);
 
   async function copyText(label: "subject" | "body" | "full", text: string) {
     try {
@@ -296,11 +293,6 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
       <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">{t("detail.emailExample")}</h2>
-          {usedFallback ? (
-            <Badge variant="secondary" className="bg-amber-100 text-amber-900 hover:bg-amber-100">
-              {t("detail.fallbackTemplate")}
-            </Badge>
-          ) : null}
         </div>
         {auditIssues.length > 0 ? (
           <p className="mt-2 text-xs text-muted-foreground">

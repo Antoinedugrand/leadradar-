@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { Prospect } from "@/lib/types";
 
@@ -26,12 +25,11 @@ interface EmailDialogProps {
 interface PitchEmail {
   subject: string;
   body: string;
-  fallback?: boolean;
   cached?: boolean;
 }
 
 export function EmailDialog({ prospect, trigger }: EmailDialogProps) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [open, setOpen] = useState(false);
   const [pitch, setPitch] = useState<PitchEmail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,7 +45,7 @@ export function EmailDialog({ prospect, trigger }: EmailDialogProps) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/prospects/${prospect.id}/pitch-email`);
+        const res = await fetch(`/api/prospects/${prospect.id}/pitch-email?language=${locale}`);
         const data = (await res.json()) as PitchEmail & { error?: string };
         if (cancelled) return;
         if (!res.ok) {
@@ -67,7 +65,7 @@ export function EmailDialog({ prospect, trigger }: EmailDialogProps) {
     return () => {
       cancelled = true;
     };
-  }, [open, pitch, prospect.id]);
+  }, [open, pitch, prospect.id, locale, t]);
 
   async function copy(label: "subject" | "body" | "full", text: string) {
     try {
@@ -115,12 +113,6 @@ export function EmailDialog({ prospect, trigger }: EmailDialogProps) {
           <div className="py-8 text-center text-sm text-destructive">{error}</div>
         ) : pitch ? (
           <div className="space-y-4">
-            {pitch.fallback ? (
-              <Badge variant="secondary" className="bg-amber-100 text-amber-900 hover:bg-amber-100">
-                {t("emailDialog.fallback")}
-              </Badge>
-            ) : null}
-
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

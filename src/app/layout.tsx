@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import { Toaster } from "sonner";
 
+import { CookieBanner } from "@/components/CookieBanner";
+import { VercelAnalyticsGate } from "@/components/VercelAnalyticsGate";
+import { CookieConsentProvider } from "@/context/CookieConsentContext";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { createT } from "@/lib/i18n";
 import { getServerLocale } from "@/lib/i18n/server";
@@ -41,8 +44,12 @@ export default async function RootLayout({
       className={`${inter.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-background text-foreground">
-        <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
-        <Toaster richColors position="top-right" />
+        <CookieConsentProvider>
+          <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
+          <CookieBanner />
+          <VercelAnalyticsGate />
+          <Toaster richColors position="top-right" />
+        </CookieConsentProvider>
       </body>
     </html>
   );
