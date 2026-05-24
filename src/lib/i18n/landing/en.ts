@@ -11,6 +11,7 @@ export const landingEn = {
     compare: "Compare",
     faq: "FAQ",
     cta: "Get started",
+    login: "Log in",
   },
   hero: {
     badge: "AI-assisted prospecting",
@@ -310,7 +311,7 @@ export const landingEn = {
 
 export type LandingCopy = {
   meta: { title: string; description: string };
-  nav: { features: string; how: string; pricing: string; compare: string; faq: string; cta: string };
+  nav: { features: string; how: string; pricing: string; compare: string; faq: string; cta: string; login: string };
   hero: {
     badge: string;
     headlineA: string;

@@ -1,79 +1,88 @@
 import Link from "next/link";
+import { Building2, Check, Lock, Shield } from "lucide-react";
 
+import { LegalNav } from "@/components/legal/legal-nav";
 import { LEGAL, LEGAL_LAST_UPDATED } from "@/lib/legal/constants";
 
 const LEGAL_LINKS = [
-  { href: "/legal/terms", title: "Conditions Générales d'Utilisation", desc: "Règles d'accès et d'usage du service." },
-  { href: "/legal/privacy", title: "Politique de confidentialité", desc: "Données collectées, finalités et vos droits." },
-  { href: "/legal/gdpr", title: "RGPD / DPA", desc: "Conformité et traitements des données." },
-  { href: "/legal/cookies", title: "Politique de cookies", desc: "Cookies utilisés et gestion du consentement." },
+  {
+    href: "/legal/terms",
+    title: "Conditions Générales d'Utilisation",
+    desc: "Règles d'accès et d'usage du service.",
+    icon: Building2,
+  },
+  {
+    href: "/legal/privacy",
+    title: "Politique de confidentialité",
+    desc: "Données collectées, finalités et vos droits.",
+    icon: Shield,
+  },
+  {
+    href: "/legal/gdpr",
+    title: "RGPD / DPA",
+    desc: "Conformité et traitements des données.",
+    icon: Lock,
+  },
+  {
+    href: "/legal/cookies",
+    title: "Politique de cookies",
+    desc: "Cookies utilisés et gestion du consentement.",
+    icon: Check,
+  },
 ] as const;
 
 export default function LegalIndexPage() {
   return (
-    <div className="mx-auto max-w-3xl px-5 py-16 sm:px-8 sm:py-24">
-      <Link href="/" className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
-        ← Retour à l&apos;accueil
-      </Link>
-      <header className="mt-6 border-b border-border pb-8">
-        <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-          Informations légales
-        </h1>
-        <p className="mt-4 text-muted-foreground">
-          Documents légaux relatifs au service {LEGAL.siteName} ({LEGAL.domain}).
-        </p>
-        <p className="mt-2 text-sm text-muted-foreground">Dernière mise à jour : {LEGAL_LAST_UPDATED}</p>
-      </header>
+    <>
+      <LegalNav />
+      <div className="lr-legal-content">
+      <div className="lr-legal-eyebrow">Légal</div>
+      <h1>Informations légales & politiques.</h1>
+      <p className="mt-1.5 max-w-[640px] text-[17px] text-[var(--slate-600)]">
+        Documents légaux relatifs au service {LEGAL.siteName}. Pour toute question :{" "}
+        <a href={`mailto:${LEGAL.contactEmail}`}>{LEGAL.contactEmail}</a>.
+      </p>
 
-      <section className="mt-10 rounded-xl border border-border bg-muted/30 p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-          Mentions légales
-        </h2>
-        <dl className="mt-4 space-y-2 text-sm text-muted-foreground">
-          <div>
-            <dt className="font-medium text-foreground">Éditeur du site</dt>
-            <dd>
-              {LEGAL.operator} — {LEGAL.legalForm}
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-foreground">SIRET</dt>
-            <dd>{LEGAL.siret}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-foreground">Contact</dt>
-            <dd>
-              <a href={`mailto:${LEGAL.contactEmail}`} className="text-indigo-600 hover:underline">
-                {LEGAL.contactEmail}
-              </a>
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-foreground">Hébergeur</dt>
-            <dd>
-              {LEGAL.host.name}, {LEGAL.host.address}
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-foreground">Site</dt>
-            <dd>{LEGAL.siteUrl}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <ul className="mt-10 grid gap-4 sm:grid-cols-2">
-        {LEGAL_LINKS.map((link) => (
-          <li key={link.href}>
-            <Link
-              href={link.href}
-              className="block rounded-xl border border-border bg-card p-5 shadow-sm transition hover:border-indigo-300 hover:shadow-md"
-            >
-              <h2 className="font-semibold text-foreground">{link.title}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{link.desc}</p>
+      <div className="lr-legal-cards">
+        {LEGAL_LINKS.map((link) => {
+          const Icon = link.icon;
+          return (
+            <Link key={link.href} href={link.href} className="lr-legal-card no-underline">
+              <span className="lr-legal-card-ico">
+                <Icon size={17} />
+              </span>
+              <h3>{link.title}</h3>
+              <p>{link.desc}</p>
+              <span className="arrow">Lire le document →</span>
             </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
+          );
+        })}
+      </div>
+
+      <h2>Dernière mise à jour</h2>
+      <p>
+        Tous les documents ci-dessus ont été révisés le <strong>{LEGAL_LAST_UPDATED}</strong>.
+      </p>
+
+      <h2>Éditeur</h2>
+      <p>
+        <strong>{LEGAL.operator}</strong> — {LEGAL.legalForm}
+        <br />
+        SIRET {LEGAL.siret}
+        <br />
+        Contact : <a href={`mailto:${LEGAL.contactEmail}`}>{LEGAL.contactEmail}</a>
+      </p>
+
+      <h2>Hébergement</h2>
+      <p>
+        <strong>{LEGAL.host.name}</strong>
+        <br />
+        {LEGAL.host.address}
+      </p>
+
+      <h2>Description du service</h2>
+      <p>{LEGAL.serviceDescription}</p>
+      </div>
+    </>
   );
 }

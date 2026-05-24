@@ -45,18 +45,18 @@ export function ContactPipelineControls({ prospectId, pipeline }: ContactPipelin
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           disabled={loading !== null}
           onClick={() => setPipeline("waiting_reply")}
           className={cn(
-            "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50",
-            effective === "waiting_reply"
-              ? "border-amber-500/40 bg-amber-500/15 text-amber-900"
-              : "border-border bg-background text-muted-foreground hover:bg-accent",
+            "lr-toggle",
+            effective === "waiting_reply" && "on",
+            loading !== null && "opacity-50",
           )}
         >
+          <span className="lr-toggle-track" />
           {loading === "waiting_reply" ? "…" : t("contacted.pending")}
         </button>
         <button
@@ -64,16 +64,16 @@ export function ContactPipelineControls({ prospectId, pipeline }: ContactPipelin
           disabled={loading !== null}
           onClick={() => setPipeline("project_done")}
           className={cn(
-            "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50",
-            effective === "project_done"
-              ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-900"
-              : "border-border bg-background text-muted-foreground hover:bg-accent",
+            "lr-toggle",
+            effective === "project_done" && "on",
+            loading !== null && "opacity-50",
           )}
         >
+          <span className="lr-toggle-track" />
           {loading === "project_done" ? "…" : t("contacted.done")}
         </button>
       </div>
-      {error ? <span className="text-[11px] text-destructive">{error}</span> : null}
+      {error ? <span className="text-[11px] text-[var(--red)]">{error}</span> : null}
     </div>
   );
 }

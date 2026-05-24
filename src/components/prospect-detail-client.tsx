@@ -2,21 +2,79 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, Copy, ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
+import {
+  ArrowUpRight,
+  Check,
+  Copy,
+  ExternalLink,
+  Gauge,
+  Globe,
+  Loader2,
+  Mail,
+  MapPin,
+  Wand2,
+} from "lucide-react";
 
 import { AuditProspectButton } from "@/components/audit-prospect-button";
+import { ContactStateDropdown } from "@/components/contact-state-dropdown";
 import { FetchReviewsButton } from "@/components/fetch-reviews-button";
 import { GenerateSiteDialog } from "@/components/generate-site-dialog";
-import { ProspectReviewInsights } from "@/components/prospect-review-insights";
+import { ProspectAvatar } from "@/components/app/prospect-avatar";
 import { ProspectScoreBadge } from "@/components/prospect-score-badge";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { ScoreArc } from "@/components/app/score-arc";
+import { StatusBadge } from "@/components/app/status-badge";
+import { TypeBadge } from "@/components/app/type-badge";
+import { GoogleRatingBadge } from "@/components/google-rating-badge";
 import { useLocale } from "@/lib/i18n/locale-provider";
-import { cn } from "@/lib/utils";
+import { getDisplayScore, getScoreLabelMeta } from "@/lib/prospect-scorer";
 import type { Prospect } from "@/lib/types";
 
 interface ProspectDetailClientProps {
   prospect: Prospect;
+}
+
+function DetailField({
+  label,
+  value,
+  wide,
+}: {
+  label: string;
+  value: React.ReactNode;
+  wide?: boolean;
+}) {
+  return (
+    <div style={{ gridColumn: wide ? "span 2" : "auto" }}>
+      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--slate-400)]">
+        {label}
+      </div>
+      <div className="text-[13px] text-[var(--slate-800)]">{value}</div>
+    </div>
+  );
+}
+
+function ReviewInsight({ tone, text }: { tone: "emerald" | "amber" | "red"; text: string }) {
+  const bg =
+    tone === "emerald"
+      ? "rgba(16,185,129,0.08)"
+      : tone === "amber"
+        ? "rgba(245,158,11,0.10)"
+        : "rgba(239,68,68,0.08)";
+  const fg = tone === "emerald" ? "#047857" : tone === "amber" ? "#B45309" : "#B91C1C";
+
+  return (
+    <div
+      className="flex items-start gap-2.5 rounded-[9px] px-3 py-2.5"
+      style={{ background: bg }}
+    >
+      <span
+        className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+        style={{ background: fg }}
+      />
+      <span className="text-[13px] leading-snug" style={{ color: fg }}>
+        {text}
+      </span>
+    </div>
+  );
 }
 
 export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
@@ -71,321 +129,368 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
   }
 
   const fullMail = subject && body ? t("detail.subjectPrefix", { subject, body }) : null;
-
   const auditIssues = (prospect.audit_issues ?? []).filter(
     (line): line is string => typeof line === "string" && line.trim().length > 0,
   );
-
+  const score = getDisplayScore(prospect);
   const screenshotUrl =
     prospect.screenshot_url ??
     (prospect.website_url
       ? `https://s.wordpress.com/mshots/v1/${encodeURIComponent(prospect.website_url)}?w=1024&h=768`
       : null);
-
-  const scoreColor = !prospect.website_exists
-    ? "text-destructive"
-    : prospect.audit_score === null
-      ? "text-muted-foreground"
-      : prospect.audit_score < 40
-        ? "text-destructive"
-        : prospect.audit_score <= 65
-          ? "text-amber-600"
-          : "text-emerald-600";
-
   const verdict = !prospect.website_exists
     ? t("verdict.noWebsiteCreation")
     : (prospect.audit_summary ?? (auditIssues.length > 0 ? auditIssues[0] : null));
+  const scoreLabel =
+    score !== null
+      ? t(getScoreLabelMeta(prospect.score_label ?? (score <= 30 ? "hot" : score <= 60 ? "warm" : "cold")).labelKey)
+      : t("detail.notAudited");
+
+  const reviewInsights = prospect.review_insights;
 
   return (
-    <div className="space-y-8">
-      <div>
-        <Button asChild variant="ghost" size="sm" className="-ml-2 gap-1 text-muted-foreground">
-          <Link href="/map-search">
-            <ArrowLeft className="h-3 w-3" /> {t("detail.backToMap")}
-          </Link>
-        </Button>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{prospect.name}</h1>
-          <ProspectScoreBadge prospect={prospect} size="md" />
+    <div className="space-y-5">
+      <div className="lr-card lr-card-pad-lg flex flex-wrap items-center gap-6">
+        <ProspectAvatar
+          name={prospect.name}
+          score={score}
+          scoreLabel={prospect.score_label}
+          size="lg"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2.5">
+            <h2
+              className="m-0 text-[28px] font-bold tracking-[-0.02em] text-[var(--slate-900)]"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {prospect.name}
+            </h2>
+            <ProspectScoreBadge prospect={prospect} size="md" />
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--slate-500)]">
+            {prospect.address ? (
+              <span className="inline-flex items-center gap-1">
+                <MapPin size={13} />
+                {prospect.address}
+              </span>
+            ) : null}
+            <TypeBadge type={prospect.type} t={t} />
+            <GoogleRatingBadge
+              rating={prospect.google_rating}
+              reviewCount={prospect.google_review_count}
+            />
+          </div>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t("detail.subtitle")}
-        </p>
-      </div>
-
-      {prospect.website_url ? (
-        <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <div className="grid gap-0 sm:grid-cols-[280px_1fr]">
-            <div className="relative aspect-[4/3] bg-muted sm:aspect-auto">
-              {screenshotUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={screenshotUrl}
-                  alt={t("detail.screenshotAlt", { name: prospect.name })}
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-muted-foreground">
-                  <ImageIcon className="h-6 w-6" />
-                </div>
-              )}
-            </div>
-            <div className="flex flex-col justify-between gap-4 p-5">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {t("detail.verdict")}
-                  </p>
-                  {prospect.audit_score !== null ? (
-                    <span className={cn("text-sm font-bold", scoreColor)}>
-                      {prospect.audit_score}/100
-                    </span>
-                  ) : (
-                    <Badge variant="outline">{t("detail.notAudited")}</Badge>
-                  )}
-                </div>
-                <p className="mt-2 text-base italic leading-relaxed text-foreground">
-                  {verdict ? `« ${verdict} »` : t("verdict.notAuditedYet")}
-                </p>
-                {auditIssues.length > 1 ? (
-                  <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                    {auditIssues.slice(1).map((issue, idx) => (
-                      <li key={`${idx}-${issue.slice(0, 32)}`}>{issue}</li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {prospect.audit_score === null ? (
-                  <AuditProspectButton
-                    prospectId={prospect.id}
-                    websiteUrl={prospect.website_url}
-                  />
-                ) : (
-                  <AuditProspectButton
-                    prospectId={prospect.id}
-                    websiteUrl={prospect.website_url}
-                  />
-                )}
-                <Button asChild variant="outline" className="gap-1.5">
-                  <a
-                    href={`/visit?url=${encodeURIComponent(prospect.website_url)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {t("detail.viewSite")} <ExternalLink className="h-3 w-3" />
-                  </a>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </section>
-      ) : (
-        <section className="rounded-xl border border-destructive/30 bg-destructive/5 p-5">
-          <p className="text-xs font-medium uppercase tracking-wide text-destructive">
-            {t("detail.verdict")}
-          </p>
-          <p className="mt-2 text-base italic leading-relaxed text-foreground">
-            {t("detail.noWebsiteQuote")}
-          </p>
-          <div className="mt-4">
-            <GenerateSiteDialog prospect={prospect} />
-          </div>
-        </section>
-      )}
-
-      <section
-        className={cn(
-          "rounded-xl border p-5 shadow-sm",
-          auditIssues.length > 0
-            ? "border-amber-500/30 bg-amber-50/60"
-            : "border-border bg-card",
-        )}
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-base font-semibold">{t("detail.issuesTitle")}</h2>
-          {auditIssues.length > 0 ? (
-            <Badge className="bg-amber-200 text-amber-950 hover:bg-amber-200">
-              {t("detail.issuesCount", { count: auditIssues.length })}
-            </Badge>
+        <div className="flex flex-col gap-2">
+          <ContactStateDropdown
+            prospectId={prospect.id}
+            status={prospect.status}
+            contactPipeline={prospect.contact_pipeline}
+            hasAudit={Boolean(prospect.audit_score)}
+          />
+          {prospect.website_url ? (
+            <a
+              href={`/visit?url=${encodeURIComponent(prospect.website_url)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="lr-btn lr-btn-secondary lr-btn-sm"
+            >
+              <Globe size={12} />
+              {t("detail.viewSite")} <ArrowUpRight size={12} />
+            </a>
           ) : null}
         </div>
-        {auditIssues.length > 0 ? (
-          <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-foreground">
-            {auditIssues.map((issue, index) => (
-              <li key={`${index}-${issue.slice(0, 48)}`} className="pl-1 marker:font-semibold">
-                {issue}
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="mt-3 text-sm text-muted-foreground">
-            {t("detail.noIssues")}
-          </p>
-        )}
-      </section>
+      </div>
 
-      <section className="rounded-xl border border-orange-500/25 bg-orange-50/40 p-5 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold">{t("detail.reviewsTitle")}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t("detail.reviewsSubtitle")}
-            </p>
-          </div>
-          <FetchReviewsButton
-            prospectId={prospect.id}
-            googlePlaceId={prospect.google_place_id}
-          />
-        </div>
-        <div className="mt-4">
-          {prospect.review_insights ? (
-            <ProspectReviewInsights insights={prospect.review_insights} />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {t("detail.reviewsHint")}
-            </p>
-          )}
-        </div>
-      </section>
-
-      <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-sm font-semibold">{t("detail.business")}</h2>
-        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-          <DetailRow label={t("common.type")} value={prospect.type} />
-          <DetailRow label={t("common.address")} value={prospect.address} />
-          <DetailRow label={t("common.city")} value={prospect.city} />
-          <DetailRow label={t("common.phone")} value={prospect.phone} />
-          <DetailRow label={t("common.email")} value={prospect.email} />
-          <DetailRow
-            label={t("common.website")}
-            value={
-              prospect.website_url ? (
-                <a
-                  href={`/visit?url=${encodeURIComponent(prospect.website_url)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-                >
-                  {prospect.website_url} <ExternalLink className="h-3 w-3" />
-                </a>
-              ) : (
-                "—"
-              )
-            }
-          />
-          <DetailRow
-            label={t("detail.auditScore")}
-            value={prospect.audit_score !== null ? `${prospect.audit_score}/100` : "—"}
-          />
-          <DetailRow
-            label={t("common.status")}
-            value={
-              <Badge variant="outline" className="uppercase">
-                {prospect.status}
-              </Badge>
-            }
-          />
-        </dl>
-      </section>
-
-      <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">{t("detail.emailExample")}</h2>
-        </div>
-        {auditIssues.length > 0 ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            {t("detail.emailIncludesList")}
-          </p>
-        ) : null}
-
-        {loading ? (
-          <p className="mt-4 inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> {t("detail.generatingEmail")}
-          </p>
-        ) : error ? (
-          <p className="mt-4 text-sm text-destructive">{error}</p>
-        ) : subject && body ? (
-          <div className="mt-4 space-y-4">
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {t("detail.subject")}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => copyText("subject", subject)}
-                  className="h-7 gap-1 text-xs"
-                >
-                  {copied === "subject" ? (
-                    <Check className="h-3 w-3" />
-                  ) : (
-                    <Copy className="h-3 w-3" />
-                  )}
-                  {copied === "subject" ? t("common.copied") : t("detail.copySubject")}
-                </Button>
-              </div>
-              <p className="mt-1 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
-                {subject}
-              </p>
+      <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+        <div className="flex flex-col gap-5">
+          <div className="lr-card lr-card-pad-lg">
+            <div className="mb-3.5 flex items-center gap-2">
+              <span className="lr-stat-ico h-7 w-7">
+                <Gauge size={15} />
+              </span>
+              <div className="lr-card-title">{t("detail.auditSection")}</div>
             </div>
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {t("detail.message")}
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => copyText("body", body)}
-                    className="h-7 gap-1 text-xs"
-                  >
-                    {copied === "body" ? (
-                      <Check className="h-3 w-3" />
-                    ) : (
-                      <Copy className="h-3 w-3" />
-                    )}
-                    {copied === "body" ? t("common.copied") : t("detail.copyBody")}
-                  </Button>
-                  {fullMail ? (
-                    <Button
-                      size="sm"
-                      onClick={() => copyText("full", fullMail)}
-                      className="h-7 gap-1 text-xs"
+
+            {prospect.website_url ? (
+              <div className="grid gap-5 md:grid-cols-[1.2fr_1fr]">
+                <div className="lr-site-shot relative overflow-hidden">
+                  <div className="lr-shot-chrome">
+                    <span className="dot" />
+                    <span className="dot" />
+                    <span className="dot" />
+                    <span className="url" />
+                  </div>
+                  {screenshotUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={screenshotUrl}
+                      alt={t("detail.screenshotAlt", { name: prospect.name })}
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  ) : (
+                    prospect.website_url
+                  )}
+                </div>
+                <div className="flex flex-col gap-4">
+                  {score !== null ? (
+                    <div className="flex items-center gap-4">
+                      <ScoreArc score={score} />
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--slate-400)]">
+                          {t("detail.overallScore")}
+                        </div>
+                        <div className="mt-1 text-[13px] font-semibold text-[var(--red)]">{scoreLabel}</div>
+                      </div>
+                    </div>
+                  ) : null}
+                  <p className="text-sm italic leading-relaxed text-[var(--slate-700)]">
+                    {verdict ? `« ${verdict} »` : t("verdict.notAuditedYet")}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <AuditProspectButton
+                      prospectId={prospect.id}
+                      websiteUrl={prospect.website_url}
+                      leadRadar
+                    />
+                    <a
+                      href={`/visit?url=${encodeURIComponent(prospect.website_url)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="lr-btn lr-btn-secondary lr-btn-sm"
                     >
-                      {copied === "full" ? (
-                        <Check className="h-3 w-3" />
-                      ) : (
-                        <Copy className="h-3 w-3" />
-                      )}
+                      <Globe size={12} />
+                      {t("detail.viewSite")} <ExternalLink size={12} />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="lr-alert danger">
+                <div className="lr-alert-ico">
+                  <Globe size={16} />
+                </div>
+                <div>
+                  <h4>{t("detail.noWebsiteTitle")}</h4>
+                  <p>{t("detail.noWebsiteQuote")}</p>
+                  <div className="mt-3">
+                    <GenerateSiteDialog prospect={prospect} />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="lr-card lr-card-pad-lg">
+            <div className="mb-3.5 flex items-center gap-2.5">
+              <div className="lr-card-title">{t("detail.issuesTitle")}</div>
+              {auditIssues.length > 0 ? (
+                <span className="rounded-full bg-[rgba(239,68,68,0.10)] px-2 py-0.5 text-[11px] font-semibold text-[var(--red)]">
+                  {t("detail.issuesCount", { count: auditIssues.length })}
+                </span>
+              ) : null}
+            </div>
+            {auditIssues.length > 0 ? (
+              <ol className="flex flex-col gap-2.5">
+                {auditIssues.map((issue, index) => (
+                  <li key={`${index}-${issue.slice(0, 32)}`} className="flex items-start gap-3">
+                    <span className="lr-mono flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--slate-100)] text-[11px] text-[var(--slate-600)]">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <span className="pt-1 text-[13px] text-[var(--slate-800)]">{issue}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-sm text-[var(--slate-500)]">{t("detail.noIssues")}</p>
+            )}
+          </div>
+
+          <div className="lr-card lr-card-pad-lg">
+            <div className="mb-3.5 flex items-center gap-2.5">
+              <span className="lr-stat-ico h-7 w-7">
+                <Mail size={15} />
+              </span>
+              <div className="lr-card-title">{t("detail.emailExample")}</div>
+              <span className="ml-auto rounded-full bg-[rgba(67,56,202,0.08)] px-2 py-0.5 text-[11px] font-semibold text-[var(--indigo)]">
+                {t("detail.aiGenerated")}
+              </span>
+            </div>
+
+            {loading ? (
+              <p className="inline-flex items-center gap-2 text-sm text-[var(--slate-500)]">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t("detail.generatingEmail")}
+              </p>
+            ) : error ? (
+              <p className="text-sm text-[var(--red)]">{error}</p>
+            ) : subject && body ? (
+              <>
+                <label className="lr-label">{t("detail.subject")}</label>
+                <div className="mb-3.5 flex items-center gap-2">
+                  <div className="lr-input flex-1 bg-[var(--slate-50)]">{subject}</div>
+                  <button
+                    type="button"
+                    className="lr-btn lr-btn-secondary lr-btn-sm"
+                    onClick={() => copyText("subject", subject)}
+                  >
+                    <Check size={12} />
+                    {copied === "subject" ? t("common.copied") : t("detail.copySubject")}
+                  </button>
+                </div>
+
+                <label className="lr-label">{t("detail.message")}</label>
+                <div className="lr-input lr-textarea-mono min-h-[200px] whitespace-pre-wrap bg-[var(--slate-50)]">
+                  {body}
+                </div>
+
+                <div className="mt-3.5 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="lr-btn lr-btn-secondary"
+                    onClick={() => copyText("body", body)}
+                  >
+                    <Copy size={13} />
+                    {copied === "body" ? t("common.copied") : t("detail.copyBody")}
+                  </button>
+                  {fullMail ? (
+                    <button
+                      type="button"
+                      className="lr-btn lr-btn-dark"
+                      onClick={() => copyText("full", fullMail)}
+                    >
+                      <Copy size={13} />
                       {copied === "full" ? t("common.copied") : t("detail.copyAll")}
-                    </Button>
+                    </button>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-[var(--slate-500)]">{t("detail.noContent")}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-5">
+          <div className="lr-card lr-card-pad-lg">
+            <div className="lr-card-title mb-3.5">{t("detail.business")}</div>
+            <div className="grid grid-cols-2 gap-3.5">
+              <DetailField label={t("common.type")} value={<TypeBadge type={prospect.type} t={t} />} />
+              <DetailField
+                label={t("detail.auditScore")}
+                value={
+                  <span className="lr-mono">
+                    {score !== null ? `${score}/100` : "—"}
+                  </span>
+                }
+              />
+              <DetailField label={t("common.city")} value={prospect.city ?? "—"} />
+              <DetailField
+                label={t("common.status")}
+                value={
+                  <StatusBadge
+                    kind={
+                      prospect.status === "replied"
+                        ? "replied"
+                        : prospect.status === "emailed" || prospect.status === "converted"
+                          ? "contacted"
+                          : "new"
+                    }
+                    label={prospect.status}
+                  />
+                }
+              />
+              <DetailField label={t("common.phone")} value={<span className="lr-mono">{prospect.phone ?? "—"}</span>} wide />
+              <DetailField label={t("common.email")} value={<span className="lr-mono">{prospect.email ?? "—"}</span>} wide />
+              <DetailField label={t("common.address")} value={prospect.address ?? "—"} wide />
+              <DetailField
+                label={t("common.website")}
+                value={
+                  prospect.website_url ? (
+                    <Link href={`/visit?url=${encodeURIComponent(prospect.website_url)}`} className="text-[var(--indigo)]">
+                      {prospect.website_url}
+                    </Link>
+                  ) : (
+                    "—"
+                  )
+                }
+                wide
+              />
+            </div>
+          </div>
+
+          <div className="lr-card lr-card-pad-lg">
+            <div className="mb-3.5 flex items-center gap-2.5">
+              <span className="lr-stat-ico h-7 w-7">
+                <Gauge size={15} />
+              </span>
+              <div className="lr-card-title">{t("detail.reviewsTitle")}</div>
+            </div>
+            {prospect.google_rating !== null ? (
+              <div className="mb-3.5 flex items-center gap-3.5">
+                <div
+                  className="text-[38px] font-bold tracking-[-0.025em] text-[var(--slate-900)]"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {prospect.google_rating.toFixed(1)}
+                </div>
+                <div>
+                  <GoogleRatingBadge
+                    rating={prospect.google_rating}
+                    reviewCount={prospect.google_review_count}
+                  />
+                  {prospect.google_review_count ? (
+                    <div className="mt-1 text-xs text-[var(--slate-500)]">
+                      {t("detail.reviewCount", { count: prospect.google_review_count })}
+                    </div>
                   ) : null}
                 </div>
               </div>
-              <pre className="mt-1 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/40 px-3 py-3 text-sm leading-relaxed">
-                {body}
-              </pre>
+            ) : null}
+
+            <div className="mb-3.5 flex flex-col gap-2.5">
+              {reviewInsights?.summary ? (
+                <ReviewInsight tone="emerald" text={reviewInsights.summary} />
+              ) : null}
+              {reviewInsights?.website_improvements?.slice(0, 1).map((text) => (
+                <ReviewInsight key={text} tone="red" text={text} />
+              ))}
+              {reviewInsights?.service_improvements?.slice(0, 1).map((text) => (
+                <ReviewInsight key={text} tone="amber" text={text} />
+              ))}
+              {reviewInsights?.improvement_points?.slice(0, 1).map((text) => (
+                <ReviewInsight key={text} tone="amber" text={text} />
+              ))}
+            </div>
+
+            <FetchReviewsButton
+              prospectId={prospect.id}
+              googlePlaceId={prospect.google_place_id}
+            />
+          </div>
+
+          <div className="lr-card lr-card-pad-lg">
+            <div className="lr-card-title mb-3.5">{t("detail.quickActions")}</div>
+            <div className="flex flex-col gap-2">
+              <AuditProspectButton
+                prospectId={prospect.id}
+                websiteUrl={prospect.website_url}
+                leadRadar
+                className="w-full justify-start"
+              />
+              <GenerateSiteDialog
+                prospect={prospect}
+                trigger={
+                  <button type="button" className="lr-btn lr-btn-secondary w-full justify-start">
+                    <Wand2 size={14} />
+                    {t("siteGen.generate")}
+                  </button>
+                }
+              />
             </div>
           </div>
-        ) : (
-          <p className="mt-4 text-sm text-muted-foreground">{t("detail.noContent")}</p>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: React.ReactNode | null | undefined }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 text-foreground">
-        {value === null || value === undefined || value === "" ? "—" : value}
-      </dd>
+        </div>
+      </div>
     </div>
   );
 }

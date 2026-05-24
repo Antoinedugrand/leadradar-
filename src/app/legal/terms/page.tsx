@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <LegalDocument
+      crumb="CGU"
       title="Conditions Générales d'Utilisation"
       intro={LEGAL.serviceDescription}
       sections={[

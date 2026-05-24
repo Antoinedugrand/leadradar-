@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 export default function GdprPage() {
   return (
     <LegalDocument
+      crumb="RGPD"
       title="RGPD / Accord de traitement des données (DPA)"
       intro="LeadRadar s'engage à respecter le Règlement général sur la protection des données (RGPD) pour les utilisateurs du SaaS et les données traitées dans le cadre du service."
       sections={[

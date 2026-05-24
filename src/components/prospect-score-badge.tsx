@@ -33,12 +33,14 @@ export function ProspectScoreBadge({
     return (
       <span
         className={cn(
-          "inline-flex shrink-0 items-center rounded-full border border-border bg-muted font-medium text-muted-foreground",
-          size === "md" ? "px-2 py-0.5 text-xs" : "px-1.5 py-0.5 text-[10px]",
+          "lr-score cold",
+          size === "sm" && "text-[10px]",
           className,
         )}
+        title={t("score.notScored")}
       >
-        {t("score.notScored")}
+        <span className="lr-score-dot" />
+        {showLabel ? t("score.notScored") : null}
       </span>
     );
   }
@@ -50,16 +52,17 @@ export function ProspectScoreBadge({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border font-bold leading-none",
-        size === "md" ? "px-2 py-0.5 text-xs" : "px-1.5 py-0.5 text-[10px]",
-        meta.className,
+        "lr-score",
+        label,
+        size === "sm" && "text-[10px]",
         className,
       )}
       title={t("score.tooltip", { score, label: labelText })}
     >
+      <span className="lr-score-dot" />
       {showEmoji ? <span aria-hidden>{meta.emoji}</span> : null}
-      {showLabel ? <span className="font-semibold">{labelText}</span> : null}
-      <span>{score}/100</span>
+      {showLabel ? <span>{labelText}</span> : null}
+      <span className="lr-score-num">· {score}/100</span>
     </span>
   );
 }

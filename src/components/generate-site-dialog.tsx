@@ -1,19 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy, ExternalLink, Globe, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import {
+  Check,
+  Copy,
+  ExternalLink,
+  Eye,
+  Loader2,
+  RefreshCw,
+  Sparkles,
+  Wand2,
+} from "lucide-react";
 import { toast } from "sonner";
 
+import { GoogleRatingBadge } from "@/components/google-rating-badge";
+import { ProspectAvatar } from "@/components/app/prospect-avatar";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+  LrDialog,
+  LrDialogBody,
+  LrDialogContent,
+  LrDialogFoot,
+  LrDialogHead,
+  LrDialogTrigger,
+} from "@/components/app/lr-dialog";
+import { TypeBadge } from "@/components/app/type-badge";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { Prospect } from "@/lib/types";
 
@@ -134,96 +144,181 @@ export function GenerateSiteDialog({ prospect, trigger, onGenerated }: GenerateS
     return null;
   }
 
+  const previewHost = previewUrl
+    ? (() => {
+        try {
+          return new URL(previewUrl).host;
+        } catch {
+          return previewUrl;
+        }
+      })()
+    : null;
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <LrDialog open={open} onOpenChange={setOpen}>
+      <LrDialogTrigger asChild>
         {trigger ?? (
-          <Button size="sm" variant="outline" className="gap-1.5">
-            <Globe className="h-3 w-3" /> {t("siteGen.button")}
-          </Button>
+          <button type="button" className="lr-btn lr-btn-secondary lr-btn-sm">
+            <Wand2 size={13} /> {t("siteGen.button")}
+          </button>
         )}
-      </DialogTrigger>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            {t("siteGen.title", { name: prospect.name })}
-          </DialogTitle>
-          <DialogDescription>{t("siteGen.description")}</DialogDescription>
-        </DialogHeader>
+      </LrDialogTrigger>
+      <LrDialogContent maxWidth={760}>
+        <LrDialogHead
+          icon={<Wand2 size={18} />}
+          title={t("siteGen.title", { name: prospect.name })}
+          description={
+            previewUrl ? t("siteGen.previewReady") : t("siteGen.description")
+          }
+        />
 
-        {loading && !previewUrl ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            {t("siteGen.generating")}
-          </div>
+        {loading && !previewUrl && !error ? (
+          <LrDialogBody>
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-sm text-[var(--slate-500)]">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              {t("siteGen.generating")}
+            </div>
+          </LrDialogBody>
         ) : error ? (
-          <div className="space-y-4 py-4">
-            <p className="text-center text-sm text-destructive">{error}</p>
-            <div className="flex justify-center">
-              <Button type="button" onClick={() => generate(false)} className="gap-1.5">
-                <Sparkles className="h-4 w-4" /> {t("siteGen.retry")}
-              </Button>
-            </div>
-          </div>
+          <>
+            <LrDialogBody>
+              <p className="py-6 text-center text-sm text-[var(--red)]">{error}</p>
+            </LrDialogBody>
+            <LrDialogFoot>
+              <span className="spacer" />
+              <button type="button" className="lr-btn lr-btn-gradient" onClick={() => generate(false)}>
+                <Sparkles size={13} /> {t("siteGen.retry")}
+              </button>
+            </LrDialogFoot>
+          </>
         ) : previewUrl ? (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              {usedFallback ? (
-                <Badge variant="secondary" className="bg-amber-100 text-amber-900 hover:bg-amber-100">
-                  {t("siteGen.fallback")}
-                </Badge>
-              ) : null}
-              {wasCached ? (
-                <Badge variant="outline">{t("siteGen.cached")}</Badge>
-              ) : null}
-            </div>
+          <>
+            <LrDialogBody>
+              <div className="mb-4 flex flex-wrap gap-2">
+                <span
+                  className="lr-pill"
+                  style={{
+                    background: "rgba(67,56,202,0.08)",
+                    color: "var(--indigo)",
+                    borderColor: "rgba(67,56,202,0.18)",
+                  }}
+                >
+                  <Sparkles size={11} /> {t("siteGen.aiVersion")}
+                </span>
+                {usedFallback ? (
+                  <span
+                    className="lr-pill"
+                    style={{
+                      background: "rgba(245,158,11,0.10)",
+                      color: "#B45309",
+                      borderColor: "rgba(245,158,11,0.22)",
+                    }}
+                  >
+                    {t("siteGen.fallback")}
+                  </span>
+                ) : null}
+                {wasCached ? (
+                  <span
+                    className="lr-pill"
+                    style={{
+                      background: "rgba(16,185,129,0.10)",
+                      color: "#047857",
+                      borderColor: "rgba(16,185,129,0.22)",
+                    }}
+                  >
+                    <Check size={11} /> {t("siteGen.shareableLink")}
+                  </span>
+                ) : null}
+              </div>
 
-            <div className="overflow-hidden rounded-lg border border-border bg-muted/30">
-              <iframe
-                title={t("siteGen.previewTitle", { name: prospect.name })}
-                src={previewUrl}
-                className="h-[420px] w-full bg-white"
-                sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-              />
-            </div>
+              <div className="overflow-hidden rounded-xl border border-[var(--slate-200)] bg-[var(--slate-100)]">
+                <div className="flex items-center gap-2 border-b border-[var(--slate-100)] bg-white px-3 py-2">
+                  <span className="flex gap-1">
+                    <span className="h-2 w-2 rounded-full bg-[#FF5F57]" />
+                    <span className="h-2 w-2 rounded-full bg-[#FEBC2E]" />
+                    <span className="h-2 w-2 rounded-full bg-[#28C840]" />
+                  </span>
+                  <div className="lr-mono mx-auto max-w-[320px] truncate rounded bg-[var(--slate-100)] px-2.5 py-0.5 text-[11px] text-[var(--slate-500)]">
+                    {previewHost}
+                  </div>
+                </div>
+                <iframe
+                  title={t("siteGen.previewTitle", { name: prospect.name })}
+                  src={previewUrl}
+                  className="h-[420px] w-full bg-white"
+                  sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                />
+              </div>
+            </LrDialogBody>
 
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button
+            <LrDialogFoot>
+              <button
                 type="button"
-                variant="outline"
-                size="sm"
+                className="lr-btn lr-btn-ghost"
                 onClick={() => generate(true)}
                 disabled={regenerating}
-                className="gap-1.5"
               >
                 {regenerating ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <Loader2 size={13} className="animate-spin" />
                 ) : (
-                  <RefreshCw className="h-3 w-3" />
+                  <RefreshCw size={13} />
                 )}
                 {regenerating ? t("siteGen.regenerating") : t("siteGen.regenerate")}
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={copyLink} className="gap-1.5">
-                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              </button>
+              <button type="button" className="lr-btn lr-btn-ghost" onClick={copyLink}>
+                {copied ? <Check size={13} /> : <Copy size={13} />}
                 {t("siteGen.copyLink")}
-              </Button>
-              <Button asChild size="sm" className="gap-1.5">
-                <a href={previewUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-3 w-3" /> {t("siteGen.openPreview")}
-                </a>
-              </Button>
-            </div>
-          </div>
+              </button>
+              <span className="spacer" />
+              <a
+                href={previewUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="lr-btn lr-btn-secondary"
+              >
+                <Eye size={13} /> {t("siteGen.openPreview")}
+              </a>
+            </LrDialogFoot>
+          </>
         ) : (
-          <div className="flex flex-col items-center gap-4 py-8">
-            <p className="max-w-md text-center text-sm text-muted-foreground">{t("siteGen.emptyHint")}</p>
-            <Button type="button" onClick={() => generate(false)} className="gap-1.5">
-              <Sparkles className="h-4 w-4" /> {t("siteGen.generate")}
-            </Button>
-          </div>
+          <>
+            <LrDialogBody>
+              <div className="mb-4 rounded-xl border border-[var(--slate-100)] bg-[var(--slate-50)] p-4">
+                <div className="mb-3 flex items-start gap-3">
+                  <ProspectAvatar name={prospect.name} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13.5px] font-semibold text-[var(--slate-900)]">
+                      {prospect.name}
+                    </div>
+                    <div className="text-xs text-[var(--slate-500)]">{prospect.address ?? "—"}</div>
+                  </div>
+                  <GoogleRatingBadge
+                    rating={prospect.google_rating}
+                    reviewCount={prospect.google_review_count}
+                  />
+                </div>
+                <p className="text-[13px] leading-relaxed text-[var(--slate-600)]">
+                  {t("siteGen.emptyHint")}
+                </p>
+                {prospect.type ? (
+                  <div className="mt-2">
+                    <TypeBadge type={prospect.type} t={t} />
+                  </div>
+                ) : null}
+              </div>
+            </LrDialogBody>
+            <LrDialogFoot>
+              <button type="button" className="lr-btn lr-btn-ghost" onClick={() => setOpen(false)}>
+                {t("common.cancel")}
+              </button>
+              <span className="spacer" />
+              <button type="button" className="lr-btn lr-btn-gradient lr-btn-lg" onClick={() => generate(false)}>
+                <Wand2 size={14} /> {t("siteGen.generate")}
+              </button>
+            </LrDialogFoot>
+          </>
         )}
-      </DialogContent>
-    </Dialog>
+      </LrDialogContent>
+    </LrDialog>
   );
 }

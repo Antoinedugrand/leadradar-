@@ -1,19 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy, Loader2, Mail, Sparkles } from "lucide-react";
+import { Check, Copy, Gauge, Loader2, Mail, Send, Sparkles, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+  LrDialog,
+  LrDialogBody,
+  LrDialogContent,
+  LrDialogFoot,
+  LrDialogHead,
+  LrDialogTrigger,
+} from "@/components/app/lr-dialog";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { Prospect } from "@/lib/types";
 
@@ -39,7 +37,12 @@ export function EmailDialog({ prospect, trigger }: EmailDialogProps) {
   const [copied, setCopied] = useState<"subject" | "body" | "full" | null>(null);
 
   useEffect(() => {
-    if (!open || pitch) return;
+    if (!open) {
+      setPitch(null);
+      return;
+    }
+    if (pitch) return;
+
     let cancelled = false;
     async function load() {
       setLoading(true);
@@ -79,7 +82,9 @@ export function EmailDialog({ prospect, trigger }: EmailDialogProps) {
   }
 
   const fullMail =
-    editedSubject && editedBody ? t("detail.subjectPrefix", { subject: editedSubject, body: editedBody }) : null;
+    editedSubject && editedBody
+      ? t("detail.subjectPrefix", { subject: editedSubject, body: editedBody })
+      : null;
 
   const context = !prospect.website_exists
     ? t("emailDialog.noWebsite")
@@ -87,116 +92,108 @@ export function EmailDialog({ prospect, trigger }: EmailDialogProps) {
       ? t("emailDialog.auditBased", { score: prospect.audit_score ?? 0 })
       : t("emailDialog.generic");
 
+  const hasDemo = Boolean(prospect.generated_site_html);
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <LrDialog open={open} onOpenChange={setOpen}>
+      <LrDialogTrigger asChild>
         {trigger ?? (
-          <Button size="sm" variant="outline" className="gap-1.5">
-            <Mail className="h-3 w-3" /> {t("map.emailAi")}
-          </Button>
+          <button type="button" className="lr-btn lr-btn-secondary lr-btn-sm">
+            <Mail size={13} /> {t("map.emailAi")}
+          </button>
         )}
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            {t("emailDialog.title", { name: prospect.name })}
-          </DialogTitle>
-          <DialogDescription>{context}</DialogDescription>
-        </DialogHeader>
+      </LrDialogTrigger>
+      <LrDialogContent maxWidth={680}>
+        <LrDialogHead
+          icon={<Mail size={18} />}
+          title={t("emailDialog.title", { name: prospect.name })}
+          description={context}
+        />
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> {t("emailDialog.generating")}
-          </div>
+          <LrDialogBody>
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-[var(--slate-500)]">
+              <Loader2 className="h-4 w-4 animate-spin" /> {t("emailDialog.generating")}
+            </div>
+          </LrDialogBody>
         ) : error ? (
-          <div className="py-8 text-center text-sm text-destructive">{error}</div>
+          <LrDialogBody>
+            <p className="py-8 text-center text-sm text-[var(--red)]">{error}</p>
+          </LrDialogBody>
         ) : pitch ? (
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {t("detail.subject")}
-                </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 gap-1 text-xs"
-                  onClick={() => copy("subject", editedSubject)}
+          <>
+            <LrDialogBody>
+              <div className="mb-4 flex flex-wrap gap-2">
+                <span
+                  className="lr-pill"
+                  style={{
+                    background: "rgba(67,56,202,0.08)",
+                    color: "var(--indigo)",
+                    borderColor: "rgba(67,56,202,0.18)",
+                  }}
                 >
-                  {copied === "subject" ? (
-                    <Check className="h-3 w-3" />
-                  ) : (
-                    <Copy className="h-3 w-3" />
-                  )}
-                  {t("common.copy")}
-                </Button>
-              </div>
-              <input
-                value={editedSubject}
-                onChange={(e) => setEditedSubject(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {t("detail.message")}
+                  <Gauge size={11} /> {t("emailDialog.contextAudit")}
                 </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 gap-1 text-xs"
-                  onClick={() => copy("body", editedBody)}
-                >
-                  {copied === "body" ? (
-                    <Check className="h-3 w-3" />
-                  ) : (
-                    <Copy className="h-3 w-3" />
-                  )}
-                  {t("common.copy")}
-                </Button>
-              </div>
-              <Textarea
-                value={editedBody}
-                onChange={(e) => setEditedBody(e.target.value)}
-                rows={14}
-                className="font-mono text-xs leading-relaxed"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => fullMail && copy("full", fullMail)}
-                className="gap-1.5"
-              >
-                {copied === "full" ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-                {t("emailDialog.copyAll")}
-              </Button>
-              {prospect.email ? (
-                <Button asChild className="gap-1.5">
-                  <a
-                    href={`mailto:${prospect.email}?subject=${encodeURIComponent(
-                      editedSubject,
-                    )}&body=${encodeURIComponent(editedBody)}`}
+                <span className="lr-pill">{t("emailDialog.variablesAi")}</span>
+                {hasDemo ? (
+                  <span
+                    className="lr-pill"
+                    style={{
+                      background: "rgba(16,185,129,0.10)",
+                      color: "#047857",
+                      borderColor: "rgba(16,185,129,0.22)",
+                    }}
                   >
-                    <Mail className="h-4 w-4" /> {t("emailDialog.openMail")}
-                  </a>
-                </Button>
+                    <Check size={11} /> {t("emailDialog.mockupAttached")}
+                  </span>
+                ) : null}
+              </div>
+
+              <label className="lr-label">{t("detail.subject")}</label>
+              <input
+                className="lr-input mb-4"
+                value={editedSubject}
+                onChange={(event) => setEditedSubject(event.target.value)}
+              />
+
+              <label className="lr-label">{t("detail.message")}</label>
+              <textarea
+                className="lr-input lr-textarea-mono min-h-[220px] text-[13px]"
+                value={editedBody}
+                onChange={(event) => setEditedBody(event.target.value)}
+              />
+
+              <p className="lr-hint mt-2">
+                <Sparkles size={11} className="mr-1 inline align-[-1px]" />
+                {t("emailDialog.regenerateHint")}
+              </p>
+            </LrDialogBody>
+
+            <LrDialogFoot>
+              <button type="button" className="lr-btn lr-btn-ghost" disabled>
+                <Wand2 size={13} /> {t("emailEditor.regenerateAi")}
+              </button>
+              <span className="spacer" />
+              <button
+                type="button"
+                className="lr-btn lr-btn-secondary"
+                onClick={() => fullMail && copy("full", fullMail)}
+              >
+                {copied === "full" ? <Check size={13} /> : <Copy size={13} />}
+                {t("emailDialog.copyAll")}
+              </button>
+              {prospect.email ? (
+                <a
+                  href={`mailto:${prospect.email}?subject=${encodeURIComponent(editedSubject)}&body=${encodeURIComponent(editedBody)}`}
+                  className="lr-btn lr-btn-gradient"
+                >
+                  <Send size={13} /> {t("emailDialog.openMail")}
+                </a>
               ) : null}
-            </div>
-          </div>
+            </LrDialogFoot>
+          </>
         ) : null}
-      </DialogContent>
-    </Dialog>
+      </LrDialogContent>
+    </LrDialog>
   );
 }

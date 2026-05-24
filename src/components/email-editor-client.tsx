@@ -1,17 +1,22 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { Check, Plus, Wand2 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { useLocale } from "@/lib/i18n/locale-provider";
+
+const VARIABLES = [
+  "{nom_etablissement}",
+  "{ville}",
+  "{type_etablissement}",
+  "{probleme_principal}",
+  "{expediteur_nom}",
+] as const;
 
 export function EmailEditorClient() {
   const { t } = useLocale();
 
-  const defaultTemplate = `${t("emailEditor.defaultSubject")}
-
-${t("emailEditor.defaultGreeting")}
+  const defaultSubject = t("emailEditor.defaultSubject");
+  const defaultBody = `${t("emailEditor.defaultGreeting")}
 
 ${t("emailEditor.defaultIntro", { type: t("emailEditor.varType"), city: t("emailEditor.varCity"), name: t("emailEditor.varName") })}
 
@@ -23,28 +28,72 @@ ${t("emailEditor.defaultClosing")}
 ${t("emailEditor.varSender")}`;
 
   return (
-    <>
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("emailEditor.title")}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t("emailEditor.subtitle")}</p>
+    <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
+      <div className="lr-card">
+        <div className="lr-card-head">
+          <div className="lr-card-title">{t("emailEditor.templateTitle")}</div>
+          <span className="ml-auto rounded-full bg-[rgba(67,56,202,0.08)] px-2 py-0.5 text-[11px] font-semibold text-[var(--indigo)]">
+            {t("emailEditor.variablesCount", { count: VARIABLES.length })}
+          </span>
         </div>
-        <Badge variant="secondary" className="gap-1">
-          <Sparkles className="h-3 w-3" /> {t("emailEditor.variables")}
-        </Badge>
+        <div className="px-[22px] py-5">
+          <label className="lr-label">{t("detail.subject")}</label>
+          <input
+            className="lr-input lr-mono mb-4 text-[13px]"
+            defaultValue={defaultSubject}
+          />
+
+          <label className="lr-label">{t("detail.message")}</label>
+          <textarea
+            className="lr-input lr-textarea-mono min-h-[340px] resize-y font-mono text-[13px] leading-relaxed"
+            defaultValue={defaultBody}
+          />
+
+          <div className="mt-4 flex flex-wrap items-center gap-2.5">
+            <button type="button" className="lr-btn lr-btn-secondary lr-btn-sm" disabled>
+              <Wand2 size={13} />
+              {t("emailEditor.regenerateAi")}
+            </button>
+            <button type="button" className="lr-btn lr-btn-secondary lr-btn-sm" disabled>
+              <Check size={13} />
+              {t("emailEditor.copy")}
+            </button>
+            <span className="ml-auto text-xs text-[var(--slate-500)]">
+              {t("emailEditor.autosaved")}
+            </span>
+          </div>
+        </div>
       </div>
 
-      <div className="mt-6 rounded-xl border border-border bg-card p-4 shadow-sm">
-        <Textarea className="h-80 font-mono text-sm" defaultValue={defaultTemplate} />
-        <p className="mt-2 text-xs text-muted-foreground">
-          {t("emailEditor.help")}{" "}
-          <code className="rounded bg-muted px-1 py-0.5">{t("emailEditor.varName")}</code>,{" "}
-          <code className="rounded bg-muted px-1 py-0.5">{t("emailEditor.varCity")}</code>,{" "}
-          <code className="rounded bg-muted px-1 py-0.5">{t("emailEditor.varType")}</code>,{" "}
-          <code className="rounded bg-muted px-1 py-0.5">{t("emailEditor.varIssue")}</code>,{" "}
-          <code className="rounded bg-muted px-1 py-0.5">{t("emailEditor.varSender")}</code>.
-        </p>
+      <div className="flex flex-col gap-4">
+        <div className="lr-card lr-card-pad-lg">
+          <div className="lr-card-title mb-3">{t("emailEditor.variablesTitle")}</div>
+          <p className="mb-3.5 text-[13px] leading-relaxed text-[var(--slate-500)]">
+            {t("emailEditor.variablesHelp")}
+          </p>
+          <div className="flex flex-col gap-2">
+            {VARIABLES.map((variable) => (
+              <button
+                key={variable}
+                type="button"
+                className="lr-btn lr-btn-secondary justify-between font-mono text-xs"
+              >
+                <span className="text-[var(--indigo)]">{variable}</span>
+                <Plus size={12} />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="lr-card lr-card-pad-lg">
+          <div className="lr-card-title mb-2">{t("emailEditor.previewTitle")}</div>
+          <p className="mb-3 text-xs text-[var(--slate-500)]">{t("emailEditor.previewHint")}</p>
+          <div className="rounded-[10px] border border-[var(--slate-200)] bg-[var(--slate-50)] p-3.5 text-[13px] leading-relaxed text-[var(--slate-800)]">
+            <div className="mb-2 font-semibold text-[var(--slate-900)]">{defaultSubject}</div>
+            <p className="text-[var(--slate-700)]">{t("emailEditor.previewBody")}</p>
+          </div>
+        </div>
       </div>
-    </>
+    </div>
   );
 }

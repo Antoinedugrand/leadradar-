@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Sparkles } from "lucide-react";
+import { Gauge, Loader2, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -10,9 +11,18 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 interface AuditProspectButtonProps {
   prospectId: string;
   websiteUrl: string | null;
+  className?: string;
+  leadRadar?: boolean;
+  iconOnly?: boolean;
 }
 
-export function AuditProspectButton({ prospectId, websiteUrl }: AuditProspectButtonProps) {
+export function AuditProspectButton({
+  prospectId,
+  websiteUrl,
+  className,
+  leadRadar = false,
+  iconOnly = false,
+}: AuditProspectButtonProps) {
   const router = useRouter();
   const { t } = useLocale();
   const [isLoading, setIsLoading] = useState(false);
@@ -46,6 +56,28 @@ export function AuditProspectButton({ prospectId, websiteUrl }: AuditProspectBut
     }
   }
 
+  if (leadRadar) {
+    return (
+      <button
+        type="button"
+        disabled={!websiteUrl || isLoading}
+        onClick={handleAudit}
+        className={cn(
+          iconOnly ? "lr-btn lr-btn-icon bordered" : "lr-btn lr-btn-ghost lr-btn-sm",
+          className,
+        )}
+        title={error ?? (iconOnly ? t("audit.audit") : undefined)}
+      >
+        {isLoading ? (
+          <Loader2 size={11} className="animate-spin" />
+        ) : (
+          <Gauge size={iconOnly ? 13 : 11} />
+        )}
+        {iconOnly ? null : isLoading ? t("audit.auditing") : t("audit.audit")}
+      </button>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-1">
       <Button
@@ -54,7 +86,7 @@ export function AuditProspectButton({ prospectId, websiteUrl }: AuditProspectBut
         size="sm"
         disabled={!websiteUrl || isLoading}
         onClick={handleAudit}
-        className="h-8 gap-1.5 text-xs"
+        className={cn("h-8 gap-1.5 text-xs", className)}
       >
         {isLoading ? (
           <Loader2 className="h-3 w-3 animate-spin" />

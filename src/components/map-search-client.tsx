@@ -4,37 +4,28 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, GoogleMap, useJsApiLoader, Marker } from "@react-google-maps/api";
 import {
-  ExternalLink,
-  Globe,
-  GlobeLock,
+  Download,
+  Filter,
   Loader2,
-  Mail,
   MapPin,
-  Phone,
+  Minus,
+  Plus,
   Search,
-  Sparkles,
+  Zap,
 } from "lucide-react";
 
 import { AuditAllButton } from "@/components/audit-all-button";
-import { AuditProspectButton } from "@/components/audit-prospect-button";
-import { ContactToggleButton } from "@/components/contact-toggle-button";
-import { EmailCell } from "@/components/email-cell";
-import { EmailDialog } from "@/components/email-dialog";
-import { GenerateSiteDialog } from "@/components/generate-site-dialog";
-import { FetchReviewsButton } from "@/components/fetch-reviews-button";
-import { ProspectReviewInsights } from "@/components/prospect-review-insights";
-import { ExportProspectsButton } from "@/components/export-prospects-button";
-import { GoogleRatingBadge } from "@/components/google-rating-badge";
-import { ProspectScoreBadge } from "@/components/prospect-score-badge";
+import { MapAiDraftCard } from "@/components/app/map-ai-draft-card";
+import { MapMiniStat } from "@/components/app/map-mini-stat";
+import { MapProspectRow } from "@/components/app/map-prospect-row";
+import { MapZoneCard } from "@/components/app/map-zone-card";
 import { PLACE_TYPE_VALUES, placeTypeLabel } from "@/lib/i18n";
 import { geocodeStatusToMessageKey, geocodeWithGoogleMaps, reverseGeocodeCity } from "@/lib/google-maps/client-geocode";
 import { placesSearchErrorMessageKey, searchPlacesInArea } from "@/lib/google-maps/client-places-search";
 import { normalizeLocationQuery, radiusKmForCityBounds } from "@/lib/geo-search";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { downloadProspectsExcel } from "@/lib/export-prospects";
 import { getDisplayScore, sortProspectsByScore } from "@/lib/prospect-scorer";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Prospect } from "@/lib/types";
 
@@ -136,13 +127,24 @@ interface AreaSearchPayload {
 }
 
 function fitMapToBounds(map: google.maps.Map, bounds: google.maps.LatLngBounds) {
-  map.fitBounds(bounds, { top: 48, right: 48, bottom: 48, left: 360 });
+  map.fitBounds(bounds, { top: 40, right: 408, bottom: 180, left: 332 });
   google.maps.event.addListenerOnce(map, "idle", () => {
     const z = map.getZoom();
     if (z !== undefined && z > 17) {
       map.setZoom(17);
     }
   });
+}
+
+function radiusPercent(km: number): number {
+  return ((km - MIN_RADIUS_KM) / (MAX_RADIUS_KM - MIN_RADIUS_KM)) * 100;
+}
+
+function markerTierColor(score: number | null): string {
+  if (score === null) return "#94a3b8";
+  if (score <= 30) return "#ef4444";
+  if (score <= 60) return "#f59e0b";
+  return "#06b6d4";
 }
 
 export function MapSearchClient({ mapsApiKey }: MapSearchClientProps) {
@@ -171,13 +173,14 @@ export function MapSearchClient({ mapsApiKey }: MapSearchClientProps) {
   const [filter, setFilter] = useState<"all" | "to-contact" | "no-site" | "bad-site" | "not-audited">(
     "to-contact",
   );
+  const [selectedProspectId, setSelectedProspectId] = useState<string | null>(null);
 
   const mapOptions = useMemo<google.maps.MapOptions>(
     () => ({
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: true,
-      zoomControl: true,
+      zoomControl: false,
       styles: worldMapStyle,
       minZoom: 2,
     }),
@@ -218,6 +221,61 @@ export function MapSearchClient({ mapsApiKey }: MapSearchClientProps) {
     const allowedIds = new Set(filteredListProspects.map((prospect) => prospect.google_place_id));
     return mapProspects.filter((prospect) => allowedIds.has(prospect.google_place_id));
   }, [mapProspects, onlyAuditedBelow50, filteredListProspects]);
+
+  const filterBase = useMemo(() => {
+    if (!onlyAuditedBelow50) return listProspects;
+    return listProspects.filter((prospect) => {
+      const score = getDisplayScore(prospect);
+      return score !== null && score < lowScoreFilterMax;
+    });
+  }, [listProspects, onlyAuditedBelow50]);
+
+  const filterCounts = useMemo(
+    () => ({
+      all: filterBase.length,
+      "to-contact": filterBase.filter((p) => p.status === "new" || p.status === "audited").length,
+      "no-site": filterBase.filter((p) => !p.website_exists || !p.website_url).length,
+      "bad-site": filterBase.filter((p) => isHotProspect(p)).length,
+      "not-audited": filterBase.filter(
+        (p) => p.website_exists && p.website_url && getDisplayScore(p) === null,
+      ).length,
+    }),
+    [filterBase],
+  );
+
+  const selectedProspect = useMemo(
+    () => filteredListProspects.find((p) => p.id === selectedProspectId) ?? null,
+    [filteredListProspects, selectedProspectId],
+  );
+
+  useEffect(() => {
+    if (filteredListProspects.length === 0) {
+      setSelectedProspectId(null);
+      return;
+    }
+    if (!selectedProspectId || !filteredListProspects.some((p) => p.id === selectedProspectId)) {
+      setSelectedProspectId(filteredListProspects[0].id);
+    }
+  }, [filteredListProspects, selectedProspectId]);
+
+  const radiusLabel =
+    radiusKm < 1
+      ? t("map.radiusMeters", { m: Math.round(radiusKm * 1000) })
+      : t("map.radiusKm", {
+          km: radiusKm.toLocaleString(locale === "fr" ? "fr-FR" : "en-US", {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          }),
+        });
+
+  const sliderPercent = radiusPercent(radiusKm);
+
+  function adjustZoom(delta: number) {
+    const map = mapRef.current;
+    if (!map) return;
+    const current = map.getZoom() ?? 12;
+    map.setZoom(Math.min(Math.max(current + delta, 2), 20));
+  }
 
   useEffect(() => {
     if (!isLoaded || hasAutoLocatedRef.current) return;
@@ -452,477 +510,398 @@ export function MapSearchClient({ mapsApiKey }: MapSearchClientProps) {
   }
 
   const stats = useMemo(() => {
-    const list = filteredListProspects;
-    const full = listProspects;
+    const list = filterBase;
     return {
       total: list.length,
       noSite: list.filter((p) => !p.website_exists).length,
       hot: list.filter((p) => isHotProspect(p)).length,
-      contacted: full.filter(
+      contacted: listProspects.filter(
         (p) => p.status === "emailed" || p.status === "replied" || p.status === "converted",
       ).length,
     };
-  }, [filteredListProspects, listProspects]);
+  }, [filterBase, listProspects]);
+
+  const showAiDraft =
+    selectedProspect &&
+    (selectedProspect.review_insights?.summary ||
+      selectedProspect.audit_summary ||
+      selectedProspect.generated_site_html);
 
   return (
-    <div className="relative h-full min-h-0 w-full min-w-0 bg-muted">
-      <div className="absolute inset-0">
-        {isLoaded ? (
-          <GoogleMap
-            mapContainerStyle={mapContainerStyle}
-            center={center}
-            zoom={3}
-            options={mapOptions}
-            onLoad={(map) => {
-              mapRef.current = map;
-            }}
-            onClick={(event) => {
-              if (!hasLaunchedSearch || !event.latLng) return;
-              hasManualCenterRef.current = true;
-              setCenter({ lat: event.latLng.lat(), lng: event.latLng.lng() });
-              setMessage(t("map.centerMoved"));
-            }}
-          >
-            <Marker position={center} />
-            {filteredMapProspects
-              .filter((prospect) => prospect.lat !== null && prospect.lng !== null)
-              .map((prospect) => {
-                const score = prospect.prospect_score ?? prospect.audit_score;
-                const fillColor =
-                  score === null
-                    ? "#9ca3af"
-                    : score <= 30
-                      ? "#dc2626"
-                      : score <= 60
-                        ? "#f59e0b"
-                        : "#16a34a";
-                return (
-                  <Marker
-                    key={`${prospect.name}-${prospect.lat}-${prospect.lng}`}
-                    position={{ lat: prospect.lat as number, lng: prospect.lng as number }}
-                    title={prospect.name}
-                    label={{
-                      text: shortMapLabel(prospect.name),
-                      color: "#0f172a",
-                      fontSize: "10px",
-                      fontWeight: "700",
-                    }}
-                    icon={{
-                      path: google.maps.SymbolPath.CIRCLE,
-                      fillColor,
-                      fillOpacity: 1,
-                      strokeColor: "#ffffff",
-                      strokeWeight: 2,
-                      scale: 10,
-                    }}
-                  />
-                );
-              })}
-            {hasLaunchedSearch ? (
-              <Circle
-                center={center}
-                radius={radiusKm * 1000}
-                options={{
-                  fillColor: "oklch(0.62 0.22 30)",
-                  fillOpacity: 0.1,
-                  strokeColor: "oklch(0.62 0.22 30)",
-                  strokeWeight: 2,
-                }}
-              />
-            ) : null}
-          </GoogleMap>
-        ) : (
-          <div className="flex h-full items-center justify-center bg-muted text-sm text-muted-foreground">
-            {loadError ? t("map.mapsLoadError") : t("map.mapsLoadingHint")}
-          </div>
-        )}
-      </div>
-
-      <aside
-        className="absolute bottom-3 left-3 top-3 z-10 flex w-[min(100vw-1.5rem,24rem)] flex-col overflow-hidden rounded-2xl border border-border bg-card/95 backdrop-blur"
-        style={{ boxShadow: "var(--shadow-elegant)" }}
-        aria-label={t("map.ariaLabel")}
-      >
-        <div className="shrink-0 border-b border-border px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-primary-foreground"
-              style={{ background: "var(--gradient-hero)" }}
+    <div className="lr-map-layout">
+      <div className="lr-map-canvas relative min-w-0 flex-1">
+        <div className="absolute inset-0">
+          {isLoaded ? (
+            <GoogleMap
+              mapContainerStyle={mapContainerStyle}
+              center={center}
+              zoom={3}
+              options={mapOptions}
+              onLoad={(map) => {
+                mapRef.current = map;
+              }}
+              onClick={(event) => {
+                if (!hasLaunchedSearch || !event.latLng) return;
+                hasManualCenterRef.current = true;
+                setCenter({ lat: event.latLng.lat(), lng: event.latLng.lng() });
+                setMessage(t("map.centerMoved"));
+              }}
             >
-              <MapPin className="h-4 w-4" />
-            </span>
-            <div>
-              <p className="text-sm font-semibold leading-tight">{t("nav.search")}</p>
-              <p className="text-[11px] leading-tight text-muted-foreground">
-                {hasLaunchedSearch
-                  ? t("map.hintRefine")
-                  : t("map.hintStart")}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-3">
-          <form onSubmit={handleCitySearch} className="space-y-3">
-            <div>
-              <label htmlFor="map-city" className="text-xs font-medium text-foreground">
-                {t("map.locationLabel")}
-              </label>
-              <Input
-                id="map-city"
-                value={locationQuery}
-                onChange={(event) => setLocationQuery(event.target.value)}
-                placeholder={t("map.locationPlaceholder")}
-                className="mt-1.5"
-              />
-            </div>
-            <Button
-              type="submit"
-              disabled={
-                !isLoaded ||
-                Boolean(loadError) ||
-                isGeocoding ||
-                isSearching ||
-                isScoring ||
-                !locationQuery.trim()
-              }
-              className="w-full gap-2"
-            >
-              {isGeocoding || isSearching || isScoring ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="h-4 w-4" />
-              )}
-              {!isLoaded
-                ? t("map.mapsLoadingHint")
-                : isGeocoding
-                  ? t("map.locating")
-                  : isSearching || isScoring
-                    ? isScoring
-                      ? t("map.scoring")
-                      : t("map.searching")
-                    : hasLaunchedSearch
-                      ? t("map.searchAgain")
-                      : t("map.search")}
-            </Button>
-          </form>
-
-          {message ? (
-            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{message}</p>
-          ) : null}
-
-          {hasLaunchedSearch ? (
-            <div className="mt-5 space-y-4 rounded-xl border border-border bg-muted/30 p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {t("map.refineZone")}
-              </p>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-foreground">{t("map.radius")}</span>
-                  <span className="font-semibold text-primary">
-                    {radiusKm < 1
-                      ? t("map.radiusMeters", { m: Math.round(radiusKm * 1000) })
-                      : t("map.radiusKm", { km: radiusKm.toFixed(2) })}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={MIN_RADIUS_KM}
-                  max={MAX_RADIUS_KM}
-                  step={0.01}
-                  value={radiusKm}
-                  onChange={(event) => setRadiusKm(Number(event.target.value))}
-                  className="w-full accent-[oklch(0.62_0.22_30)]"
+              <Marker position={center} />
+              {filteredMapProspects
+                .filter((prospect) => prospect.lat !== null && prospect.lng !== null)
+                .map((prospect) => {
+                  const score = prospect.prospect_score ?? prospect.audit_score;
+                  return (
+                    <Marker
+                      key={`${prospect.name}-${prospect.lat}-${prospect.lng}`}
+                      position={{ lat: prospect.lat as number, lng: prospect.lng as number }}
+                      title={prospect.name}
+                      label={{
+                        text: shortMapLabel(prospect.name),
+                        color: "#0f172a",
+                        fontSize: "10px",
+                        fontWeight: "700",
+                      }}
+                      icon={{
+                        path: google.maps.SymbolPath.CIRCLE,
+                        fillColor: markerTierColor(score),
+                        fillOpacity: 1,
+                        strokeColor: "#ffffff",
+                        strokeWeight: 2,
+                        scale: 10,
+                      }}
+                    />
+                  );
+                })}
+              {hasLaunchedSearch ? (
+                <Circle
+                  center={center}
+                  radius={radiusKm * 1000}
+                  options={{
+                    fillColor: "#06b6d4",
+                    fillOpacity: 0.07,
+                    strokeColor: "rgba(6,182,212,0.45)",
+                    strokeWeight: 1.5,
+                  }}
                 />
-                <p className="text-[10px] text-muted-foreground">
-                  {t("map.clickToMove")}
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <span className="text-xs font-medium text-foreground">{t("map.placeType")}</span>
-                        <div className="flex flex-wrap gap-1.5">
-                  {PLACE_TYPE_VALUES.map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setSelectedPlaceType(value)}
-                      className={cn(
-                        "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                        selectedPlaceType === value
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-background text-muted-foreground hover:bg-accent",
-                      )}
-                    >
-                      {placeTypeLabel(t, value)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-border bg-background px-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={onlyAuditedBelow50}
-                  onChange={(event) => setOnlyAuditedBelow50(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-[oklch(0.62_0.22_30)]"
-                />
-                <span className="text-xs leading-relaxed text-foreground">
-                  {t("map.filterLowScore", { max: lowScoreFilterMax })}
-                  <span className="block text-muted-foreground">
-                    {t("map.filterLowScoreHint")}
-                  </span>
-                </span>
-              </label>
-
-              <Button
-                type="button"
-                onClick={() => void runAreaSearch()}
-                disabled={isSearching || isScoring}
-                variant="outline"
-                className="w-full gap-2"
-              >
-                {isSearching || isScoring ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Search className="h-4 w-4" />
-                )}
-                {t("map.refresh")}
-              </Button>
-            </div>
-          ) : null}
-
-          {hasLaunchedSearch && listProspects.length > 0 ? (
-            <AuditAllButton
-              prospects={listProspects}
-              onCompleted={() => void runAreaSearch()}
-              className="mt-3 w-full"
-            />
-          ) : null}
-
-          {listProspects.length > 0 ? (
-            <>
-              <div className="mt-4 grid grid-cols-4 gap-1.5">
-                <Stat label={t("map.statTotal")} value={stats.total} />
-                <Stat label={t("map.statNoSite")} value={stats.noSite} accent="destructive" />
-                <Stat label={t("map.statHot")} value={stats.hot} accent="primary" />
-                <Stat label={t("map.statContacted")} value={stats.contacted} />
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-1">
-                {(
-                  [
-                    { v: "all", l: t("map.filterAll") },
-                    { v: "to-contact", l: t("map.filterToContact") },
-                    { v: "no-site", l: t("map.filterNoSite") },
-                    { v: "bad-site", l: t("map.filterHot") },
-                    { v: "not-audited", l: t("map.filterNotAudited") },
-                  ] as const
-                ).map((f) => (
-                  <button
-                    key={f.v}
-                    onClick={() => setFilter(f.v)}
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                      filter === f.v
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                    )}
-                  >
-                    {f.l}
-                  </button>
-                ))}
-              </div>
-
-              <div className="mt-4 space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {t("map.prospects", { count: filteredListProspects.length })}
-                  </p>
-                  <ExportProspectsButton
-                    prospects={filteredListProspects}
-                    filenameBase={`carte_${locationQuery || "zone"}`}
-                    className="h-7 text-[10px]"
-                  />
-                </div>
-                <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-background">
-                  {filteredListProspects.map((p) => {
-                    const verdict = !p.website_exists
-                      ? t("verdict.noWebsite")
-                      : (p.audit_summary ??
-                        (p.audit_issues && p.audit_issues.length > 0 ? p.audit_issues[0] : null));
-                    return (
-                      <li key={p.id} className="p-3 text-xs hover:bg-accent/30">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex min-w-0 flex-wrap items-center gap-2">
-                              <h4 className="text-sm font-semibold text-foreground">{p.name}</h4>
-                              <GoogleRatingBadge
-                                rating={p.google_rating}
-                                reviewCount={p.google_review_count}
-                              />
-                              <ProspectScoreBadge prospect={p} />
-                            </div>
-                            {p.address ? (
-                              <p className="mt-0.5 truncate text-muted-foreground">{p.address}</p>
-                            ) : null}
-                            {p.review_insights ? (
-                              <ProspectReviewInsights
-                                insights={p.review_insights}
-                                compact
-                              />
-                            ) : verdict ? (
-                              <p className="mt-1.5 line-clamp-2 italic text-foreground/80">
-                                « {verdict} »
-                              </p>
-                            ) : null}
-                            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                              {p.website_url ? (
-                                <a
-                                  href={`/visit?url=${encodeURIComponent(p.website_url)}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-primary hover:underline"
-                                >
-                                  <Globe className="h-3 w-3" /> {t("common.site")}{" "}
-                                  <ExternalLink className="h-3 w-3" />
-                                </a>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 font-medium text-destructive">
-                                  <GlobeLock className="h-3 w-3" /> {t("common.noSite")}
-                                </span>
-                              )}
-                              {p.phone ? (
-                                <span className="inline-flex items-center gap-1 text-muted-foreground">
-                                  <Phone className="h-3 w-3" />
-                                  {p.phone}
-                                </span>
-                              ) : null}
-                              {p.email ? (
-                                <span className="inline-flex items-center gap-1 text-muted-foreground">
-                                  <Mail className="h-3 w-3" />
-                                  <EmailCell email={p.email} />
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end gap-1.5">
-                            <ContactToggleButton
-                              prospectId={p.id}
-                              status={p.status}
-                              hasAudit={Boolean(p.audit_score)}
-                              onStatusChange={(nextStatus) => {
-                                setListProspects((prev) =>
-                                  prev.map((row) =>
-                                    row.id === p.id ? { ...row, status: nextStatus } : row,
-                                  ),
-                                );
-                              }}
-                            />
-                            <AuditProspectButton
-                              prospectId={p.id}
-                              websiteUrl={p.website_url}
-                            />
-                            <FetchReviewsButton
-                              prospectId={p.id}
-                              googlePlaceId={p.google_place_id}
-                              onInsightsReady={(insights) => {
-                                setListProspects((prev) =>
-                                  prev.map((row) =>
-                                    row.id === p.id ? { ...row, review_insights: insights } : row,
-                                  ),
-                                );
-                              }}
-                            />
-                            {!p.website_exists || !p.website_url ? (
-                              <GenerateSiteDialog
-                                prospect={p}
-                                trigger={
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 gap-1 text-[11px]"
-                                  >
-                                    <Globe className="h-3 w-3" /> {t("siteGen.button")}
-                                  </Button>
-                                }
-                              />
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <Badge variant="outline" className="text-[10px]">
-                            {p.status === "new" ? t("common.new") : p.status === "audited" ? t("common.audited") : p.status}
-                          </Badge>
-                          <div className="flex items-center gap-1.5">
-                            <EmailDialog
-                              prospect={p}
-                              trigger={
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 gap-1 text-[11px]"
-                                >
-                                  <Mail className="h-3 w-3" /> {t("map.emailAi")}
-                                </Button>
-                              }
-                            />
-                            <Link
-                              href={`/prospects/${p.id}/detail`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-                            >
-                              {t("common.details")} <ExternalLink className="h-3 w-3" />
-                            </Link>
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            </>
+              ) : null}
+            </GoogleMap>
           ) : (
-            <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
-              {hasLaunchedSearch
-                ? t("map.emptyZone")
-                : t("map.emptyStart")}
-            </p>
+            <div className="flex h-full items-center justify-center bg-[var(--slate-100)] text-sm text-[var(--slate-500)]">
+              {loadError ? t("map.mapsLoadError") : t("map.mapsLoadingHint")}
+            </div>
           )}
         </div>
-      </aside>
-    </div>
-  );
-}
 
-function Stat({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: number;
-  accent?: "destructive" | "primary";
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-background px-2 py-1.5">
-      <div
-        className={cn(
-          "text-base font-bold leading-none",
-          accent === "destructive"
-            ? "text-destructive"
-            : accent === "primary"
-              ? "text-primary"
-              : "text-foreground",
-        )}
-      >
-        {value}
+        {isLoaded ? (
+          <div className="lr-map-zoom-controls" style={{ left: hasLaunchedSearch ? 332 : 16 }}>
+            <button type="button" className="lr-btn lr-btn-icon" onClick={() => adjustZoom(1)} aria-label="Zoom in">
+              <Plus size={16} />
+            </button>
+            <div className="h-px bg-[var(--slate-100)]" />
+            <button type="button" className="lr-btn lr-btn-icon" onClick={() => adjustZoom(-1)} aria-label="Zoom out">
+              <Minus size={16} />
+            </button>
+          </div>
+        ) : null}
+
+        {hasLaunchedSearch && listProspects.length > 0 ? (
+          <MapZoneCard prospects={listProspects} />
+        ) : null}
+
+        {showAiDraft && selectedProspect ? <MapAiDraftCard prospect={selectedProspect} /> : null}
+
+        <aside
+          className={cn("lr-map-panel", hasLaunchedSearch && "lr-map-panel-expanded")}
+          style={{
+            position: "absolute",
+            left: 16,
+            top: 16,
+            width: 300,
+            zIndex: 10,
+          }}
+          aria-label={t("map.ariaLabel")}
+        >
+          <div className="lr-map-panel-head">
+            <div className="flex items-center gap-2">
+              <span className="lr-map-panel-head-icon">
+                <MapPin size={14} />
+              </span>
+              <div className="lr-map-panel-head-title">{t("nav.search")}</div>
+            </div>
+            <p className="lr-map-panel-head-hint">
+              {hasLaunchedSearch ? t("map.panelHint") : t("map.hintStart")}
+            </p>
+          </div>
+
+          <div className={cn("lr-map-panel-body", hasLaunchedSearch && "lr-map-panel-scroll")}>
+            <div className="lr-map-panel-section">
+              <form onSubmit={handleCitySearch}>
+                <label htmlFor="map-city" className="lr-label">
+                  {t("map.locationLabel")}
+                </label>
+                <div className="lr-input-group">
+                  <span className="lr-input-ico">
+                    <Search size={13} />
+                  </span>
+                  <input
+                    id="map-city"
+                    className="lr-input"
+                    value={locationQuery}
+                    onChange={(event) => setLocationQuery(event.target.value)}
+                    placeholder={t("map.locationPlaceholderShort")}
+                  />
+                </div>
+                <p className="lr-hint">{t("map.cityHint")}</p>
+                <button
+                  type="submit"
+                  disabled={
+                    !isLoaded ||
+                    Boolean(loadError) ||
+                    isGeocoding ||
+                    isSearching ||
+                    isScoring ||
+                    !locationQuery.trim()
+                  }
+                  className="lr-btn lr-btn-gradient lr-map-panel-submit w-full justify-center"
+                >
+                  {isGeocoding || isSearching || isScoring ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Search size={13} />
+                  )}
+                  {!isLoaded
+                    ? t("map.mapsLoadingHint")
+                    : isGeocoding
+                      ? t("map.locating")
+                      : isSearching || isScoring
+                        ? isScoring
+                          ? t("map.scoring")
+                          : t("map.searching")
+                        : hasLaunchedSearch
+                          ? t("map.searchAgain")
+                          : t("map.search")}
+                </button>
+              </form>
+
+              {message ? (
+                <p className="lr-map-panel-message">{message}</p>
+              ) : null}
+            </div>
+
+            {hasLaunchedSearch ? (
+              <>
+                <div className="lr-map-panel-section">
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="lr-label m-0">{t("map.radius")}</label>
+                    <span className="lr-mono text-xs text-[var(--slate-700)]">{radiusLabel}</span>
+                  </div>
+                  <div className="lr-slider">
+                    <input
+                      type="range"
+                      min={MIN_RADIUS_KM}
+                      max={MAX_RADIUS_KM}
+                      step={0.01}
+                      value={radiusKm}
+                      onChange={(event) => setRadiusKm(Number(event.target.value))}
+                      className="absolute inset-0 z-[2] h-full w-full cursor-pointer opacity-0"
+                      aria-label={t("map.radius")}
+                    />
+                    <div className="lr-slider-track">
+                      <div className="lr-slider-fill" style={{ width: `${sliderPercent}%` }} />
+                      <div className="lr-slider-thumb" style={{ left: `${sliderPercent}%` }} />
+                    </div>
+                  </div>
+                  <div className="lr-mono mt-1.5 flex justify-between text-[10px] text-[var(--slate-400)]">
+                    <span>50m</span>
+                    <span>30 km</span>
+                  </div>
+
+                  <label className="lr-label mt-3.5">{t("map.placeType")}</label>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {PLACE_TYPE_VALUES.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setSelectedPlaceType(value)}
+                        className={cn(
+                          "lr-pill lr-pill-compact",
+                          selectedPlaceType === value && "active",
+                        )}
+                      >
+                        {placeTypeLabel(t, value)}
+                      </button>
+                    ))}
+                  </div>
+
+                  <label
+                    className={cn("lr-check mt-3.5", onlyAuditedBelow50 && "checked")}
+                    onClick={() => setOnlyAuditedBelow50((prev) => !prev)}
+                  >
+                    <span className="lr-check-box" aria-hidden>
+                      {onlyAuditedBelow50 ? "✓" : ""}
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={onlyAuditedBelow50}
+                      onChange={(event) => setOnlyAuditedBelow50(event.target.checked)}
+                    />
+                    {t("map.filterLowScore", { max: lowScoreFilterMax })}
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => void runAreaSearch()}
+                    disabled={isSearching || isScoring}
+                    className="lr-btn lr-btn-gradient mt-3.5 w-full justify-center"
+                  >
+                    {isSearching || isScoring ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Zap size={15} />
+                    )}
+                    {t("map.refresh")}
+                  </button>
+                </div>
+
+                {listProspects.length > 0 ? (
+                  <div className="lr-map-panel-section lr-map-panel-section-compact">
+                    <p className="mb-2 text-[10px] text-[var(--slate-500)]">
+                      {t("map.resultsFound", { count: filterBase.length })}
+                    </p>
+
+                    <div className="lr-map-panel-stats">
+                      <MapMiniStat compact label={t("map.statTotal")} value={stats.total} />
+                      <MapMiniStat compact label={t("map.statNoSite")} value={stats.noSite} tone="danger" />
+                      <MapMiniStat compact label={t("map.statHot")} value={stats.hot} tone="hot" />
+                      <MapMiniStat
+                        compact
+                        label={t("map.statContacted")}
+                        value={stats.contacted}
+                        tone="success"
+                      />
+                    </div>
+
+                    <AuditAllButton
+                      prospects={listProspects}
+                      onCompleted={() => void runAreaSearch()}
+                      leadRadar
+                      className="mt-2 w-full justify-center"
+                    />
+
+                    <div className="lr-map-panel-filters mt-2">
+                      {(
+                        [
+                          { v: "all" as const, l: t("map.filterAll"), dot: null },
+                          { v: "to-contact" as const, l: t("map.filterToContact"), dot: null },
+                          { v: "no-site" as const, l: t("map.filterNoSite"), dot: null },
+                          { v: "bad-site" as const, l: t("map.filterHot"), dot: "#EF4444" },
+                          { v: "not-audited" as const, l: t("map.filterNotAudited"), dot: null },
+                        ] as const
+                      ).map((f) => (
+                        <button
+                          key={f.v}
+                          type="button"
+                          onClick={() => setFilter(f.v)}
+                          className={cn("lr-pill lr-pill-compact", filter === f.v && "active")}
+                        >
+                          {f.dot ? (
+                            <span
+                              className="mr-1 inline-block h-[5px] w-[5px] rounded-full"
+                              style={{ background: f.dot }}
+                            />
+                          ) : null}
+                          {f.l}{" "}
+                          <span className="lr-pill-count">{filterCounts[f.v]}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="lr-map-panel-section">
+                    <p className="text-xs leading-relaxed text-[var(--slate-500)]">{t("map.emptyZone")}</p>
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+        </aside>
       </div>
-      <div className="mt-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
+
+      {hasLaunchedSearch ? (
+      <aside className="lr-map-prospect-panel" aria-label={t("map.prospectsTitle")}>
+        <div className="border-b border-[var(--slate-100)] px-5 py-[18px]">
+          <div className="mb-1 flex items-center justify-between">
+            <div>
+              <div
+                className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--slate-900)]"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {t("map.prospectsTitle")}
+              </div>
+              <div className="text-xs text-[var(--slate-500)]">
+                {t("map.sortedByPotential", { count: filteredListProspects.length })}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              disabled={filteredListProspects.length === 0}
+              onClick={() =>
+                downloadProspectsExcel(
+                  filteredListProspects,
+                  `carte_${locationQuery || "zone"}`,
+                  locale,
+                )
+              }
+              className="lr-btn lr-btn-secondary lr-btn-sm"
+            >
+              <Download size={13} />
+              {t("export.button", { count: filteredListProspects.length })}
+            </button>
+            <button type="button" className="lr-btn lr-btn-ghost lr-btn-sm" disabled title={t("map.sortedByPotential", { count: filteredListProspects.length })}>
+              <Filter size={13} />
+              {t("map.sortLabel")}
+            </button>
+          </div>
+        </div>
+
+        <div className="lr-map-panel-scroll">
+          {filteredListProspects.length > 0 ? (
+            filteredListProspects.map((prospect) => (
+              <MapProspectRow
+                key={prospect.id}
+                prospect={prospect}
+                selected={prospect.id === selectedProspectId}
+                onSelect={() => setSelectedProspectId(prospect.id)}
+              />
+            ))
+          ) : (
+            <div className="px-5 py-8 text-center text-xs text-[var(--slate-500)]">
+              {hasLaunchedSearch ? t("map.emptyZone") : t("map.emptyStart")}
+            </div>
+          )}
+        </div>
+
+        {filteredListProspects.length > 0 ? (
+          <div className="flex items-center justify-between border-t border-[var(--slate-100)] bg-[var(--slate-50)] px-5 py-2.5 text-[11px] text-[var(--slate-500)]">
+            <span>
+              {t("map.shownOf", {
+                shown: filteredListProspects.length,
+                total: filterBase.length,
+              })}
+            </span>
+            <Link href="/prospects" className="font-semibold text-[var(--indigo)]">
+              {t("map.viewAll")}
+            </Link>
+          </div>
+        ) : null}
+      </aside>
+      ) : null}
     </div>
   );
 }

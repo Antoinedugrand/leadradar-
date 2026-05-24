@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight, Menu } from "lucide-react";
 
@@ -36,6 +37,9 @@ export function Navbar() {
         </div>
         <div className="nav-right">
           <LanguageSwitch />
+          <Link className="btn btn-secondary btn-sm" href="/dashboard">
+            {t.nav.login}
+          </Link>
           <a className="btn btn-gradient btn-sm" href="#pricing">
             {t.nav.cta}
             <ArrowRight size={14} aria-hidden="true" />
@@ -57,6 +61,9 @@ export function Navbar() {
             {link.label}
           </a>
         ))}
+        <Link href="/dashboard" onClick={() => setMenuOpen(false)}>
+          {t.nav.login}
+        </Link>
         <LanguageSwitch showOnMobile />
       </div>
     </nav>

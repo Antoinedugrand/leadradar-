@@ -12,6 +12,7 @@ export const metadata: Metadata = {
 export default function CookiesPage() {
   return (
     <LegalDocument
+      crumb="Cookies"
       title="Politique de cookies"
       intro="Cette page explique quels cookies et traceurs sont utilisés sur leadradar.us et comment gérer vos préférences."
       sections={[

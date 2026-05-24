@@ -13,6 +13,7 @@ export const landingFr: LandingCopy = {
     compare: "Comparer",
     faq: "FAQ",
     cta: "Commencer",
+    login: "Connexion",
   },
   hero: {
     badge: "Prospection assistée par IA",

@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <LegalDocument
+      crumb="Confidentialité"
       title="Politique de confidentialité"
       intro="Cette politique décrit comment LeadRadar traite les données personnelles dans le cadre du service SaaS."
       sections={[

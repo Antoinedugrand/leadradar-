@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { Inter, Space_Grotesk } from "next/font/google";
+import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 
 import { CookieBanner } from "@/components/CookieBanner";
 import { VercelAnalyticsGate } from "@/components/VercelAnalyticsGate";
 import { CookieConsentProvider } from "@/context/CookieConsentContext";
+import { satoshi } from "@/lib/fonts";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { createT } from "@/lib/i18n";
 import { getServerLocale } from "@/lib/i18n/server";
@@ -12,12 +13,6 @@ import "./globals.css";
 
 const inter = Inter({
   variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
   subsets: ["latin"],
   display: "swap",
 });
@@ -41,7 +36,7 @@ export default async function RootLayout({
   return (
     <html
       lang={locale}
-      className={`${inter.variable} ${spaceGrotesk.variable} h-full antialiased`}
+      className={`${inter.variable} ${satoshi.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-background text-foreground">
         <CookieConsentProvider>

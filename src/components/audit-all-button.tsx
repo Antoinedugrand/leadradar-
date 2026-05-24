@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Sparkles } from "lucide-react";
+import { Gauge, Loader2, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ interface AuditAllButtonProps {
   onCompleted?: () => void;
   variant?: "default" | "secondary" | "outline";
   className?: string;
+  leadRadar?: boolean;
 }
 
 export function AuditAllButton({
@@ -29,6 +31,7 @@ export function AuditAllButton({
   onCompleted,
   variant = "secondary",
   className,
+  leadRadar = false,
 }: AuditAllButtonProps) {
   const router = useRouter();
   const { t } = useLocale();
@@ -87,6 +90,27 @@ export function AuditAllButton({
     router.refresh();
   }
 
+  const label = running
+    ? t("audit.progress", { done, total })
+    : targets.length > 0
+      ? t("audit.allCount", { count: targets.length })
+      : t("audit.all");
+
+  if (leadRadar) {
+    return (
+      <button
+        type="button"
+        onClick={runAll}
+        disabled={running || targets.length === 0}
+        className={cn("lr-btn lr-btn-dark lr-btn-sm w-full justify-center", className)}
+        title={targets.length === 0 ? t("audit.none") : t("audit.toAudit", { count: targets.length })}
+      >
+        {running ? <Loader2 size={13} className="animate-spin" /> : <Gauge size={13} />}
+        {label}
+      </button>
+    );
+  }
+
   return (
     <Button
       type="button"
@@ -105,11 +129,7 @@ export function AuditAllButton({
       ) : (
         <Sparkles className="h-4 w-4" />
       )}
-      {running
-        ? t("audit.progress", { done, total })
-        : targets.length > 0
-          ? t("audit.allCount", { count: targets.length })
-          : t("audit.all")}
+      {label}
     </Button>
   );
 }
