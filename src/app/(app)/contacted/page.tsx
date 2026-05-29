@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { Clock, Download, Inbox, Send, Target } from "lucide-react";
+import { Clock, Inbox, Send, Target } from "lucide-react";
 
 import { AppTopbar } from "@/components/app/app-topbar";
 import { ContactEmailCell, ContactPhoneCell } from "@/components/app/contact-table-cells";
 import { ProspectAvatar } from "@/components/app/prospect-avatar";
 import { StatCard } from "@/components/app/stat-card";
 import { StatusBadge } from "@/components/app/status-badge";
+import { ContactedTopbarActions } from "@/components/app/contacted-topbar-actions";
 import { ResetProspectsButton } from "@/components/app/reset-prospects-button";
 import { ContactPipelineControls } from "@/components/contact-pipeline-controls";
 import { requirePageUser } from "@/lib/auth/require-user";
@@ -92,10 +93,7 @@ export default async function ContactedPage({
         title={t("contacted.title")}
         crumbs={[t("nav.prospecting"), t("nav.contacted")]}
         actions={
-          <button type="button" className="lr-btn lr-btn-secondary" disabled>
-            <Download size={14} />
-            {t("export.button", { count: prospects.length })}
-          </button>
+          <ContactedTopbarActions exportCount={prospects.length} totalCount={stats.total} />
         }
       />
       <div className="lr-content">
@@ -135,7 +133,7 @@ export default async function ContactedPage({
         </div>
 
         <div className="lr-card overflow-hidden">
-          <div className="lr-card-head">
+          <div className="lr-card-head flex-wrap">
             <div className="lr-card-title">
               {t("contacted.pipelineTitle", { count: prospects.length })}
             </div>

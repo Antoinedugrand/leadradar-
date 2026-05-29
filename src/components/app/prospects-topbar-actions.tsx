@@ -2,6 +2,7 @@
 
 import { Download, Filter } from "lucide-react";
 
+import { ResetProspectsButton } from "@/components/app/reset-prospects-button";
 import { AuditAllButton } from "@/components/audit-all-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { downloadProspectsExcel } from "@/lib/export-prospects";
@@ -29,6 +30,7 @@ export function ProspectsTopbarActions({ prospects }: ProspectsTopbarActionsProp
         <Download size={14} />
         {t("export.button", { count: prospects.length })}
       </button>
+      <ResetProspectsButton scope="active" disabled={prospects.length === 0} />
       <AuditAllButton prospects={prospects} leadRadar className="justify-center" />
     </>
   );

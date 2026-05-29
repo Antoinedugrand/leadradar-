@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const { error, count } = await supabase
+    const { data, error } = await supabase
       .from("prospects")
       .update({
         status: "audited",
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
         emailed_at: null,
       })
       .in("status", ["emailed", "replied", "converted"])
-      .select("id", { count: "exact", head: true });
+      .select("id");
 
     if (error) {
       return NextResponse.json(
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       message: "Liste des contactés réinitialisée.",
-      count: count ?? 0,
+      count: data?.length ?? 0,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

@@ -96,7 +96,7 @@ export function ProspectsListClient({ prospects, errorMessage }: ProspectsListCl
       </div>
 
       <div className="lr-card overflow-hidden">
-        <div className="lr-card-head">
+        <div className="lr-card-head flex-wrap">
           <div className="lr-card-title">
             {t("prospects.tableTitle", { count: filtered.length })}
           </div>
