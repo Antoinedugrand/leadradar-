@@ -63,18 +63,30 @@ export async function POST(request: Request) {
 
     const normalizedLocation = normalizeLocationQuery(payload.location);
 
-    const { result: geocoded, status: geocodeStatus } = await geocodeAddress(
-      normalizedLocation,
-      googleApiKey,
-      { language: "fr" },
-    );
+    const { result: geocoded, status: geocodeStatus, errorMessage: geocodeErrorMessage } =
+      await geocodeAddress(normalizedLocation, googleApiKey, { language: "fr" });
 
     if (!geocoded) {
-      const message =
-        geocodeStatus === "REQUEST_DENIED"
-          ? "Géocodage refusé par Google. Vérifiez la clé API Geocoding."
-          : "Aucune localisation trouvée.";
-      return NextResponse.json({ error: message }, { status: geocodeStatus === "REQUEST_DENIED" ? 502 : 404 });
+      if (geocodeStatus === "REQUEST_DENIED") {
+        return NextResponse.json(
+          {
+            error:
+              "Géocodage refusé par Google. Vérifiez GOOGLE_PLACES_API_KEY (clé serveur), Geocoding API activée, et pas de restriction « Sites web » sur cette clé.",
+            status: geocodeStatus,
+            details: geocodeErrorMessage,
+          },
+          { status: 502 },
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error: "Aucune localisation trouvée.",
+          status: geocodeStatus,
+          details: geocodeErrorMessage,
+        },
+        { status: 404 },
+      );
     }
 
     const geometry = {

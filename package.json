@@ -7,6 +7,7 @@
     "dev:fresh": "sh scripts/dev-fresh.sh",
     "repair": "sh scripts/repair-dev.sh",
     "verify:deps": "node scripts/verify-deps.mjs",
+    "verify:geocoding": "node scripts/verify-google-geocoding.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
