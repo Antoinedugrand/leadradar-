@@ -34,7 +34,7 @@ export function AuditAllButton({
   leadRadar = false,
 }: AuditAllButtonProps) {
   const router = useRouter();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(0);
   const [total, setTotal] = useState(0);
@@ -65,6 +65,7 @@ export function AuditAllButton({
           body: JSON.stringify({
             prospectId: target.id,
             websiteUrl: target.website_url,
+            language: locale,
           }),
         });
         if (res.status === 429) {

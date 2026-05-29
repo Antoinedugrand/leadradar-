@@ -2,14 +2,17 @@ import Link from "next/link";
 import { Clock, Download, Inbox, Send, Target } from "lucide-react";
 
 import { AppTopbar } from "@/components/app/app-topbar";
+import { ContactEmailCell, ContactPhoneCell } from "@/components/app/contact-table-cells";
 import { ProspectAvatar } from "@/components/app/prospect-avatar";
 import { StatCard } from "@/components/app/stat-card";
 import { StatusBadge } from "@/components/app/status-badge";
+import { ResetProspectsButton } from "@/components/app/reset-prospects-button";
 import { ContactPipelineControls } from "@/components/contact-pipeline-controls";
+import { requirePageUser } from "@/lib/auth/require-user";
 import { getServerLocale, getServerT } from "@/lib/i18n/server";
+import { LOCALE_BCP47 } from "@/lib/i18n";
 import { getDisplayScore } from "@/lib/prospect-scorer";
-import { Prospect } from "@/lib/types";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import type { Prospect } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -31,12 +34,12 @@ export default async function ContactedPage({
 }) {
   const { t } = await getServerT();
   const locale = await getServerLocale();
-  const dateLocale = locale === "fr" ? "fr-FR" : "en-US";
+  const dateLocale = LOCALE_BCP47[locale];
 
   const { vue: vueRaw } = await searchParams;
   const vue: Vue = vueRaw === "waiting" || vueRaw === "done" ? vueRaw : "all";
 
-  const supabase = getSupabaseServerClient();
+  const { supabase } = await requirePageUser();
   const { data: allData } = await supabase
     .from("prospects")
     .select("*")
@@ -89,12 +92,10 @@ export default async function ContactedPage({
         title={t("contacted.title")}
         crumbs={[t("nav.prospecting"), t("nav.contacted")]}
         actions={
-          <>
-            <button type="button" className="lr-btn lr-btn-secondary" disabled>
-              <Download size={14} />
-              {t("export.button", { count: prospects.length })}
-            </button>
-          </>
+          <button type="button" className="lr-btn lr-btn-secondary" disabled>
+            <Download size={14} />
+            {t("export.button", { count: prospects.length })}
+          </button>
         }
       />
       <div className="lr-content">
@@ -138,9 +139,14 @@ export default async function ContactedPage({
             <div className="lr-card-title">
               {t("contacted.pipelineTitle", { count: prospects.length })}
             </div>
-            <span className="ml-auto text-xs text-[var(--slate-500)]">
+            <span className="text-xs text-[var(--slate-500)]">
               {t("contacted.sortedByDate")}
             </span>
+            <ResetProspectsButton
+              scope="contacted"
+              disabled={stats.total === 0}
+              className="ml-auto shrink-0"
+            />
           </div>
 
           <div className="lr-table-wrap">
@@ -189,14 +195,10 @@ export default async function ContactedPage({
                           </div>
                         </td>
                         <td>
-                          <span className="lr-mono text-xs text-[var(--slate-700)]">
-                            {prospect.email ?? "—"}
-                          </span>
+                          <ContactEmailCell email={prospect.email} source={prospect.email_source} />
                         </td>
                         <td>
-                          <span className="lr-mono text-xs text-[var(--slate-700)]">
-                            {prospect.phone ?? "—"}
-                          </span>
+                          <ContactPhoneCell phone={prospect.phone} source={prospect.phone_source} />
                         </td>
                         <td>
                           <span className="text-[13px] text-[var(--slate-700)]">

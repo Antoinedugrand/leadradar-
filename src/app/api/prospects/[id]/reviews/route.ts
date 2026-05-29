@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { requireApiUser } from "@/lib/auth/require-user";
 import { getServerEnv } from "@/lib/env";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { fetchAndAnalyzeReviews } from "@/lib/review-insights";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Prospect } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -21,7 +21,9 @@ export async function POST(_request: Request, context: RouteContext) {
 
     const { id } = await context.params;
     const env = getServerEnv();
-    const supabase = getSupabaseServerClient();
+    const auth = await requireApiUser();
+    if ("error" in auth) return auth.error;
+    const { supabase } = auth;
 
     const { data, error } = await supabase.from("prospects").select("*").eq("id", id).single();
     if (error || !data) {

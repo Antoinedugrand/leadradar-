@@ -19,7 +19,7 @@ import { MapAiDraftCard } from "@/components/app/map-ai-draft-card";
 import { MapMiniStat } from "@/components/app/map-mini-stat";
 import { MapProspectRow } from "@/components/app/map-prospect-row";
 import { MapZoneCard } from "@/components/app/map-zone-card";
-import { PLACE_TYPE_VALUES, placeTypeLabel } from "@/lib/i18n";
+import { LOCALE_BCP47, PLACE_TYPE_VALUES, placeTypeLabel } from "@/lib/i18n";
 import { geocodeStatusToMessageKey, geocodeWithGoogleMaps, reverseGeocodeCity } from "@/lib/google-maps/client-geocode";
 import { placesSearchErrorMessageKey, searchPlacesInArea } from "@/lib/google-maps/client-places-search";
 import { normalizeLocationQuery, radiusKmForCityBounds } from "@/lib/geo-search";
@@ -262,7 +262,7 @@ export function MapSearchClient({ mapsApiKey }: MapSearchClientProps) {
     radiusKm < 1
       ? t("map.radiusMeters", { m: Math.round(radiusKm * 1000) })
       : t("map.radiusKm", {
-          km: radiusKm.toLocaleString(locale === "fr" ? "fr-FR" : "en-US", {
+          km: radiusKm.toLocaleString(LOCALE_BCP47[locale], {
             minimumFractionDigits: 1,
             maximumFractionDigits: 1,
           }),
@@ -411,6 +411,7 @@ export function MapSearchClient({ mapsApiKey }: MapSearchClientProps) {
         }
 
         if (clientSearch.prospects.length > 0) {
+          setMessage(t("map.enrichingContacts"));
           const ingestResponse = await fetch("/api/search/ingest", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

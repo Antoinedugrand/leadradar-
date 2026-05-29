@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Download, ExternalLink } from "lucide-react";
 
+import { ContactEmailCell, ContactPhoneCell } from "@/components/app/contact-table-cells";
 import { GoogleRatingBadge } from "@/components/google-rating-badge";
 import { ProspectScoreBadge } from "@/components/prospect-score-badge";
 import { StatusBadge } from "@/components/app/status-badge";
@@ -81,10 +82,10 @@ export function ProspectsResultsTable({
                   </div>
                 </td>
                 <td>
-                  <span className="lr-mono text-xs">{prospect.phone ?? "—"}</span>
+                  <ContactPhoneCell phone={prospect.phone} source={prospect.phone_source} />
                 </td>
                 <td>
-                  <span className="lr-mono text-xs">{prospect.email ?? "—"}</span>
+                  <ContactEmailCell email={prospect.email} source={prospect.email_source} />
                 </td>
                 <td>
                   <TypeBadge type={prospect.type} t={t} />

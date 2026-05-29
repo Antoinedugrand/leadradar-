@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { AppTopbar } from "@/components/app/app-topbar";
 import { ProspectDetailTopbarActions } from "@/components/app/prospect-detail-topbar-actions";
 import { ProspectDetailClient } from "@/components/prospect-detail-client";
+import { requirePageUser } from "@/lib/auth/require-user";
 import { getServerT } from "@/lib/i18n/server";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Prospect } from "@/lib/types";
 
 interface PageProps {
@@ -14,7 +14,7 @@ interface PageProps {
 export default async function ProspectDetailPage({ params }: PageProps) {
   const { t } = await getServerT();
   const { id } = await params;
-  const supabase = getSupabaseServerClient();
+  const { supabase } = await requirePageUser();
   const { data, error } = await supabase
     .from("prospects")
     .select("*")

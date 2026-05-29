@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
   Check,
@@ -14,16 +14,20 @@ import {
   MapPin,
   Wand2,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { AuditProspectButton } from "@/components/audit-prospect-button";
 import { ContactStateDropdown } from "@/components/contact-state-dropdown";
 import { FetchReviewsButton } from "@/components/fetch-reviews-button";
 import { GenerateSiteDialog } from "@/components/generate-site-dialog";
+import { ExternalWebsiteLink } from "@/components/app/external-website-link";
+import { ContactSourceHint } from "@/components/app/contact-source-hint";
+import { SocialLinksList } from "@/components/app/social-links-list";
 import { ProspectAvatar } from "@/components/app/prospect-avatar";
 import { ProspectScoreBadge } from "@/components/prospect-score-badge";
 import { ScoreArc } from "@/components/app/score-arc";
 import { StatusBadge } from "@/components/app/status-badge";
-import { TypeBadge } from "@/components/app/type-badge";
+import { BusinessTypeDisplay } from "@/components/app/business-type-display";
 import { GoogleRatingBadge } from "@/components/google-rating-badge";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { getDisplayScore, getScoreLabelMeta } from "@/lib/prospect-scorer";
@@ -82,41 +86,81 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
   const [subject, setSubject] = useState<string | null>(null);
   const [body, setBody] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<"subject" | "body" | "full" | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
+  const auditSignature = useMemo(
+    () =>
+      [
+        prospect.audit_score,
+        prospect.audit_summary,
+        prospect.audit_issues?.join("|"),
+        prospect.website_exists,
+      ].join("::"),
+    [
+      prospect.audit_score,
+      prospect.audit_summary,
+      prospect.audit_issues,
+      prospect.website_exists,
+    ],
+  );
+
+  const hasAudit = prospect.audit_score !== null;
+
+  const loadEmail = useCallback(
+    async (regenerate = false) => {
+      if (regenerate) {
+        setRegenerating(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
+
       try {
-        const res = await fetch(`/api/prospects/${prospect.id}/pitch-email?language=${locale}`);
+        const res = regenerate
+          ? await fetch(`/api/prospects/${prospect.id}/pitch-email?language=${locale}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ regenerate: true, useAuditContext: true }),
+            })
+          : await fetch(`/api/prospects/${prospect.id}/pitch-email?language=${locale}`);
+
         const data = (await res.json()) as {
           subject?: string;
           body?: string;
+          fallback?: boolean;
           error?: string;
         };
-        if (cancelled) return;
+
         if (!res.ok) {
           setError(data.error ?? t("emailDialog.generateError"));
           setSubject(null);
           setBody(null);
           return;
         }
+
         setSubject(data.subject ?? null);
         setBody(data.body ?? null);
+        if (data.fallback) {
+          toast.info(t("emailDialog.fallback"));
+        }
       } catch {
-        if (!cancelled) setError(t("common.networkError"));
+        setError(t("common.networkError"));
       } finally {
-        if (!cancelled) setLoading(false);
+        if (regenerate) {
+          setRegenerating(false);
+        } else {
+          setLoading(false);
+        }
       }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [prospect.id, locale, t]);
+    },
+    [locale, prospect.id, t],
+  );
+
+  useEffect(() => {
+    void loadEmail(false);
+  }, [loadEmail, auditSignature]);
 
   async function copyText(label: "subject" | "body" | "full", text: string) {
     try {
@@ -174,7 +218,7 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
                 {prospect.address}
               </span>
             ) : null}
-            <TypeBadge type={prospect.type} t={t} />
+            <BusinessTypeDisplay prospect={prospect} />
             <GoogleRatingBadge
               rating={prospect.google_rating}
               reviewCount={prospect.google_review_count}
@@ -189,15 +233,10 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
             hasAudit={Boolean(prospect.audit_score)}
           />
           {prospect.website_url ? (
-            <a
-              href={`/visit?url=${encodeURIComponent(prospect.website_url)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="lr-btn lr-btn-secondary lr-btn-sm"
-            >
+            <ExternalWebsiteLink url={prospect.website_url} className="lr-btn lr-btn-secondary lr-btn-sm">
               <Globe size={12} />
               {t("detail.viewSite")} <ArrowUpRight size={12} />
-            </a>
+            </ExternalWebsiteLink>
           ) : null}
         </div>
       </div>
@@ -214,7 +253,11 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
 
             {prospect.website_url ? (
               <div className="grid gap-5 md:grid-cols-[1.2fr_1fr]">
-                <div className="lr-site-shot relative overflow-hidden">
+                <ExternalWebsiteLink
+                  url={prospect.website_url}
+                  className="lr-site-shot relative block overflow-hidden no-underline"
+                  title={t("detail.viewSite")}
+                >
                   <div className="lr-shot-chrome">
                     <span className="dot" />
                     <span className="dot" />
@@ -229,9 +272,11 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
                       className="absolute inset-0 h-full w-full object-cover"
                     />
                   ) : (
-                    prospect.website_url
+                    <span className="absolute inset-0 flex items-center justify-center p-4 text-center text-xs text-[var(--slate-500)]">
+                      {prospect.website_url}
+                    </span>
                   )}
-                </div>
+                </ExternalWebsiteLink>
                 <div className="flex flex-col gap-4">
                   {score !== null ? (
                     <div className="flex items-center gap-4">
@@ -253,15 +298,10 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
                       websiteUrl={prospect.website_url}
                       leadRadar
                     />
-                    <a
-                      href={`/visit?url=${encodeURIComponent(prospect.website_url)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="lr-btn lr-btn-secondary lr-btn-sm"
-                    >
+                    <ExternalWebsiteLink url={prospect.website_url} className="lr-btn lr-btn-secondary lr-btn-sm">
                       <Globe size={12} />
                       {t("detail.viewSite")} <ExternalLink size={12} />
-                    </a>
+                    </ExternalWebsiteLink>
                   </div>
                 </div>
               </div>
@@ -315,6 +355,20 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
               <span className="ml-auto rounded-full bg-[rgba(67,56,202,0.08)] px-2 py-0.5 text-[11px] font-semibold text-[var(--indigo)]">
                 {t("detail.aiGenerated")}
               </span>
+              <button
+                type="button"
+                className="lr-btn lr-btn-ghost lr-btn-sm"
+                disabled={!hasAudit || loading || regenerating}
+                title={!hasAudit ? t("detail.notAudited") : undefined}
+                onClick={() => void loadEmail(true)}
+              >
+                {regenerating ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Wand2 size={12} />
+                )}
+                {regenerating ? t("detail.regeneratingEmail") : t("detail.regenerateEmailAudit")}
+              </button>
             </div>
 
             {loading ? (
@@ -375,7 +429,7 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
           <div className="lr-card lr-card-pad-lg">
             <div className="lr-card-title mb-3.5">{t("detail.business")}</div>
             <div className="grid grid-cols-2 gap-3.5">
-              <DetailField label={t("common.type")} value={<TypeBadge type={prospect.type} t={t} />} />
+              <DetailField label={t("common.type")} value={<BusinessTypeDisplay prospect={prospect} />} />
               <DetailField
                 label={t("detail.auditScore")}
                 value={
@@ -400,20 +454,43 @@ export function ProspectDetailClient({ prospect }: ProspectDetailClientProps) {
                   />
                 }
               />
-              <DetailField label={t("common.phone")} value={<span className="lr-mono">{prospect.phone ?? "—"}</span>} wide />
-              <DetailField label={t("common.email")} value={<span className="lr-mono">{prospect.email ?? "—"}</span>} wide />
+              <DetailField
+                label={t("common.phone")}
+                value={
+                  <span className="lr-mono">
+                    {prospect.phone ?? "—"}
+                    {prospect.phone ? <ContactSourceHint source={prospect.phone_source} /> : null}
+                  </span>
+                }
+                wide
+              />
+              <DetailField
+                label={t("common.email")}
+                value={
+                  <span className="lr-mono">
+                    {prospect.email ?? "—"}
+                    {prospect.email ? <ContactSourceHint source={prospect.email_source} /> : null}
+                  </span>
+                }
+                wide
+              />
               <DetailField label={t("common.address")} value={prospect.address ?? "—"} wide />
               <DetailField
                 label={t("common.website")}
                 value={
                   prospect.website_url ? (
-                    <Link href={`/visit?url=${encodeURIComponent(prospect.website_url)}`} className="text-[var(--indigo)]">
+                    <ExternalWebsiteLink url={prospect.website_url} className="text-[var(--indigo)]">
                       {prospect.website_url}
-                    </Link>
+                    </ExternalWebsiteLink>
                   ) : (
                     "—"
                   )
                 }
+                wide
+              />
+              <DetailField
+                label={t("detail.socialLinks")}
+                value={<SocialLinksList links={prospect.social_links} />}
                 wide
               />
             </div>

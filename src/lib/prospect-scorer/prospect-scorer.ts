@@ -107,7 +107,7 @@ export class ProspectScorer {
       };
     });
 
-    if (!analysis?.reachable && analysis !== null && analysis !== undefined) {
+    if (analysis !== null && analysis !== undefined && !analysis.reachable) {
       score -= 20;
       breakdown.push({
         criterion: "Site inaccessible",
@@ -135,7 +135,11 @@ export class ProspectScorer {
     }
 
     const websiteAnalysis = await this.analyzeWebsite(input.websiteUrl);
-    return this.calculateScore({ ...input, websiteAnalysis });
+    const result = this.calculateScore({ ...input, websiteAnalysis });
+    return {
+      ...result,
+      socialLinks: websiteAnalysis.socialLinks,
+    };
   }
 }
 

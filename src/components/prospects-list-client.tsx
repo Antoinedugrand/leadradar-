@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 
 import { FilterTabs } from "@/components/app/filter-tabs";
 import { ProspectTableRow } from "@/components/app/prospect-table-row";
+import { ResetProspectsButton } from "@/components/app/reset-prospects-button";
 import { StatusBadge } from "@/components/app/status-badge";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { getDisplayScore } from "@/lib/prospect-scorer";
@@ -62,6 +63,7 @@ export function ProspectsListClient({ prospects, errorMessage }: ProspectsListCl
       return (
         prospect.name.toLowerCase().includes(q) ||
         (prospect.address?.toLowerCase().includes(q) ?? false) ||
+        (prospect.phone?.toLowerCase().includes(q) ?? false) ||
         (prospect.email?.toLowerCase().includes(q) ?? false)
       );
     });
@@ -99,6 +101,11 @@ export function ProspectsListClient({ prospects, errorMessage }: ProspectsListCl
             {t("prospects.tableTitle", { count: filtered.length })}
           </div>
           <StatusBadge kind="new" label={t("prospects.sortedByPotential")} />
+          <ResetProspectsButton
+            scope="active"
+            disabled={prospects.length === 0}
+            className="ml-auto shrink-0"
+          />
         </div>
 
         <div className="lr-table-wrap">
@@ -106,8 +113,9 @@ export function ProspectsListClient({ prospects, errorMessage }: ProspectsListCl
             <thead>
               <tr>
                 <th style={{ width: 280 }}>{t("table.business")}</th>
-                <th style={{ width: 200 }}>{t("table.addressPhone")}</th>
-                <th style={{ width: 180 }}>{t("common.email")}</th>
+                <th style={{ width: 180 }}>{t("common.address")}</th>
+                <th style={{ width: 140 }}>{t("common.phone")}</th>
+                <th style={{ width: 200 }}>{t("common.email")}</th>
                 <th style={{ width: 130 }}>{t("table.siteAudit")}</th>
                 <th>{t("table.verdict")}</th>
                 <th style={{ width: 320 }}>{t("common.status")}</th>
@@ -117,13 +125,13 @@ export function ProspectsListClient({ prospects, errorMessage }: ProspectsListCl
             <tbody>
               {errorMessage ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-[var(--red)]">
+                  <td colSpan={8} className="px-4 py-6 text-[var(--red)]">
                     {errorMessage}
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-[var(--slate-500)]">
+                  <td colSpan={8} className="px-4 py-12 text-center text-[var(--slate-500)]">
                     {prospects.length === 0 ? (
                       <>
                         {t("prospects.empty")}{" "}

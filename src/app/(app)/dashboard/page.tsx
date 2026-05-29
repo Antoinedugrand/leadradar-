@@ -13,10 +13,11 @@ import {
 
 import { DashboardRecentItem } from "@/components/app/dashboard-recent-item";
 import { DashboardTopbarActions } from "@/components/app/dashboard-topbar-actions";
+import { UpgradeSuccessBanner } from "@/components/billing/upgrade-success-banner";
 import { StatCard } from "@/components/app/stat-card";
 import { AppTopbar } from "@/components/app/app-topbar";
+import { requirePageUser } from "@/lib/auth/require-user";
 import { getServerT } from "@/lib/i18n/server";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Prospect } from "@/lib/types";
 
 const lowScoreThreshold = 45;
@@ -29,9 +30,14 @@ function countSince(prospects: Prospect[], days: number, predicate?: (prospect: 
   }).length;
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ upgrade?: string }>;
+}) {
   const { t } = await getServerT();
-  const supabase = getSupabaseServerClient();
+  const { upgrade } = await searchParams;
+  const { supabase } = await requirePageUser();
   const { data } = await supabase
     .from("prospects")
     .select("*")
@@ -84,6 +90,7 @@ export default async function DashboardPage() {
         actions={<DashboardTopbarActions prospects={prospects} />}
       />
       <div className="lr-content lr-content-narrow">
+        {upgrade === "success" ? <UpgradeSuccessBanner /> : null}
         {/* Hero */}
         <div className="lr-hero mb-6">
           <div className="lr-radar-rings">

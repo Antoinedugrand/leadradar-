@@ -75,6 +75,29 @@ export function MapProspectRow({ prospect, selected, onSelect }: MapProspectRowP
             <div className="mb-1.5 text-[11px] text-[var(--slate-500)]">{addressLine}</div>
           ) : null}
 
+          {(prospect.email || prospect.phone) && (
+            <div className="mb-1.5 flex flex-col gap-0.5 text-[11px] text-[var(--slate-600)]">
+              {prospect.email ? (
+                <a
+                  href={`mailto:${prospect.email}`}
+                  className="lr-mono truncate text-[var(--indigo)] no-underline hover:underline"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {prospect.email}
+                </a>
+              ) : null}
+              {prospect.phone ? (
+                <a
+                  href={`tel:${prospect.phone.replace(/[^\d+]/g, "")}`}
+                  className="lr-mono truncate no-underline hover:text-[var(--indigo)]"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {prospect.phone}
+                </a>
+              ) : null}
+            </div>
+          )}
+
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <ProspectScoreBadge prospect={prospect} size="sm" />
             {!prospect.website_exists || !prospect.website_url ? (

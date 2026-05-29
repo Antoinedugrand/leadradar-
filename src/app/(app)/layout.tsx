@@ -1,23 +1,26 @@
 import { AppSidebar } from "@/components/app/app-sidebar";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getServerUser } from "@/lib/supabase/server-user";
 
 export default async function AppShellLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const supabase = getSupabaseServerClient();
+  const session = await getServerUser();
+  const supabase = session?.supabase;
 
-  const [{ count: prospectsCount }, { count: contactedCount }] = await Promise.all([
-    supabase
-      .from("prospects")
-      .select("*", { count: "exact", head: true })
-      .in("status", ["new", "audited"]),
-    supabase
-      .from("prospects")
-      .select("*", { count: "exact", head: true })
-      .in("status", ["emailed", "replied", "converted"]),
-  ]);
+  const [{ count: prospectsCount }, { count: contactedCount }] = supabase
+    ? await Promise.all([
+        supabase
+          .from("prospects")
+          .select("*", { count: "exact", head: true })
+          .in("status", ["new", "audited"]),
+        supabase
+          .from("prospects")
+          .select("*", { count: "exact", head: true })
+          .in("status", ["emailed", "replied", "converted"]),
+      ])
+    : [{ count: 0 }, { count: 0 }];
 
   return (
     <div className="app-shell">

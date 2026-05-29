@@ -5,15 +5,21 @@
   "scripts": {
     "dev": "next dev",
     "dev:fresh": "sh scripts/dev-fresh.sh",
+    "repair": "sh scripts/repair-dev.sh",
+    "verify:deps": "node scripts/verify-deps.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:check": "node scripts/check-supabase-columns.mjs",
+    "db:migrate": "node scripts/apply-supabase-migrations.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@react-google-maps/api": "^2.20.8",
+    "@stripe/stripe-js": "^9.7.0",
+    "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.3",
     "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",
@@ -23,6 +29,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "sonner": "^2.0.7",
+    "stripe": "^22.2.0",
     "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3"
   },
@@ -33,6 +40,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.5",
+    "postgres": "^3.4.9",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

@@ -17,10 +17,18 @@ export interface ClaudePitchSplit {
   after: string;
 }
 
-export function pitchCacheKey(prospect: Prospect, locale: Locale): string {
+export type PitchAngle = "default" | "direct" | "warm" | "short";
+
+export const REGENERATE_ANGLES: Exclude<PitchAngle, "default">[] = ["direct", "warm", "short"];
+
+export function pickRegenerateAngle(): Exclude<PitchAngle, "default"> {
+  return REGENERATE_ANGLES[Math.floor(Math.random() * REGENERATE_ANGLES.length)]!;
+}
+
+export function pitchCacheKey(prospect: Prospect, locale: Locale, angle: PitchAngle = "default"): string {
   const issues = (prospect.audit_issues ?? []).join("||");
   const summary = (prospect.audit_summary ?? "").slice(0, 220);
-  return `${locale}:${prospect.id}:${prospect.website_exists}:${prospect.audit_score ?? "na"}:${summary}:${issues.slice(0, 400)}`;
+  return `${locale}:${angle}:${prospect.id}:${prospect.website_exists}:${prospect.audit_score ?? "na"}:${summary}:${issues.slice(0, 400)}`;
 }
 
 function normalizePlaceType(type: string | null, locale: Locale): string {
@@ -108,6 +116,30 @@ export function fallbackPitch(prospect: Prospect, locale: Locale): PitchEmail {
   return { subject, body };
 }
 
+function buildAngleInstructions(angle: PitchAngle, locale: Locale): string {
+  if (angle === "default") {
+    return "";
+  }
+
+  if (locale === "en") {
+    if (angle === "direct") {
+      return "\nTone variation: be more direct and factual. Shorter sentences. One clear CTA (10-min call). No fluff.";
+    }
+    if (angle === "warm") {
+      return "\nTone variation: warmer and more personable — like a neighbor who runs a small web studio. Friendly but still professional.";
+    }
+    return "\nTone variation: keep the email short (80–120 words total). Minimal intro, one concrete point, one soft CTA.";
+  }
+
+  if (angle === "direct") {
+    return "\nVariation de ton : plus direct et factuel. Phrases courtes. Un seul appel à l'action clair (appel de 10 min). Pas de blabla.";
+  }
+  if (angle === "warm") {
+    return "\nVariation de ton : plus chaleureux et humain — comme un voisin qui fait des sites pour les commerces du quartier. Amical mais pro.";
+  }
+  return "\nVariation de ton : email court (80 à 120 mots au total). Intro minimale, un point concret, un appel à l'action discret.";
+}
+
 function buildBaseFacts(prospect: Prospect, hasNoWebsite: boolean, locale: Locale): string {
   if (locale === "en") {
     return `
@@ -131,10 +163,12 @@ function buildBaseFacts(prospect: Prospect, hasNoWebsite: boolean, locale: Local
 export function buildPitchPrompt(
   prospect: Prospect,
   locale: Locale,
+  angle: PitchAngle = "default",
 ): { prompt: string; parseMode: "split" | "full" } {
   const issues = prospect.audit_issues ?? [];
   const hasNoWebsite = !prospect.website_exists || !prospect.website_url;
   const baseFacts = buildBaseFacts(prospect, hasNoWebsite, locale);
+  const angleInstructions = buildAngleInstructions(angle, locale);
 
   if (locale === "en") {
     if (hasNoWebsite) {
@@ -146,7 +180,7 @@ ${baseFacts}
 
 Context: no real website visible for this prospect. Never say you "visited their site" or "analyzed their pages". Stay factual: many customers search on Google Maps / phone.
 
-Style: professional but warm, short sentences, direct tone (like an email to a local business owner). Avoid: "I hope this finds you well", "digital solutions", "synergy", "turnkey", "boost your visibility", "we partner with you".
+Style: professional but warm, short sentences, direct tone (like an email to a local business owner). Avoid: "I hope this finds you well", "digital solutions", "synergy", "turnkey", "boost your visibility", "we partner with you".${angleInstructions}
 
 Reply ONLY with this JSON (no markdown):
 {"subject":"max 90 characters, include the business or area name","body":"Email 130-220 words. Start with Hello, then 2 paragraphs + one soft CTA (offer a 15-min call, no pressure). End with Best regards, then a line [Your first name]. Use \\n for line breaks."}`,
@@ -163,7 +197,7 @@ ${baseFacts}
 Issues spotted on the site (DO NOT copy them in your response; they will be inserted verbatim after your intro):
 ${issues.map((t, n) => `${n + 1}. ${t}`).join("\n")}
 
-Style: warm, human, natural sentences. Avoid agency jargon.
+Style: warm, human, natural sentences. Avoid agency jargon.${angleInstructions}
 
 Reply ONLY with this JSON (no markdown):
 {"subject":"one concrete line with the business name","before":"After Hello, 2-4 sentences. Mention the exact name « ${prospect.name} », activity type and area if relevant. Say you browsed their site and what stood out overall (without listing the issues above). Use \\n for line breaks.","after":"2-4 sentences: why these points matter for customers, what you can do concretely, offer a short no-pressure call. No bullet list. No Best regards here. Use \\n if needed."}`,
@@ -176,7 +210,7 @@ Reply ONLY with this JSON (no markdown):
 
 ${baseFacts}
 
-They have a site but the automatic audit has no issue list yet: do NOT invent specific technical problems. Talk about clarifying the offer, building trust, making the site easier on mobile.
+They have a site but the automatic audit has no issue list yet: do NOT invent specific technical problems. Talk about clarifying the offer, building trust, making the site easier on mobile.${angleInstructions}
 
 Reply ONLY with this JSON:
 {"subject":"personalized line with the name","body":"Full email: Hello, 2 short paragraphs, call-to-action. End with Best regards, then [Your first name]. Use \\n for line breaks."}`,
@@ -192,7 +226,7 @@ ${baseFacts}
 
 Contexte : pas de site web réellement visible pour ce prospect. Ne dis jamais que tu as « visité leur site » ou « analysé les pages ». Reste factuel : beaucoup de clients cherchent sur Google Maps / téléphone.
 
-Style : vouvoiement, phrases un peu courtes, ton chaleureux et direct (comme un mail qu'on enverrait à un commerce du quartier). Évite absolument : « Je me permets », « solutions digitales », « expertise », « clé en main », « booster votre visibilité », « nous accompagnons ».
+Style : vouvoiement, phrases un peu courtes, ton chaleureux et direct (comme un mail qu'on enverrait à un commerce du quartier). Évite absolument : « Je me permets », « solutions digitales », « expertise », « clé en main », « booster votre visibilité », « nous accompagnons ».${angleInstructions}
 
 Réponds UNIQUEMENT avec ce JSON (pas de markdown) :
 {"subject":"max 90 caractères, avec le nom du lieu ou de l'établissement","body":"Email 130 à 220 mots. Commence par Bonjour, puis 2 paragraphes + une phrase d'appel à l'action (proposition d'un appel de 15 min, sans pression). Termine par Cordialement, puis une ligne [Votre prénom]. Utilise \\n pour les sauts de ligne."}`,
@@ -209,7 +243,7 @@ ${baseFacts}
 Liste des points repérés sur le site (NE PAS les recopier dans ta réponse ; ils seront insérés tels quels après ton texte d'introduction) :
 ${issues.map((t, n) => `${n + 1}. ${t}`).join("\n")}
 
-Consignes de style : vouvoiement, ton humain (bistro / commerce de proximité, pas pitch agence). Phrases naturelles. Évite : « Je me permets », « solutions digitales », « expertise », « clé en main », « nous vous accompagnons », « croissance ».
+Consignes de style : vouvoiement, ton humain (bistro / commerce de proximité, pas pitch agence). Phrases naturelles. Évite : « Je me permets », « solutions digitales », « expertise », « clé en main », « nous vous accompagnons », « croissance ».${angleInstructions}
 
 Réponds UNIQUEMENT avec ce JSON (pas de markdown) :
 {"subject":"une ligne, concrète, avec le nom de l'établissement","before":"Après Bonjour, 2 à 4 phrases. Mentionne le nom exact « ${prospect.name} », le type d'activité et la zone si pertinent. Dis que tu as parcouru leur site et ce que tu en retiens globalement (sans lister les points ci-dessus). Utilise \\n pour les sauts de ligne.","after":"2 à 4 phrases : pourquoi ces points comptent pour leurs clients, ce que tu peux faire concrètement, proposition d'un appel court sans engagement. Pas de liste à puces. Pas Cordialement ici. Utilise \\n si besoin."}`,
@@ -224,7 +258,7 @@ ${baseFacts}
 
 Il existe un site mais l'audit automatique n'a pas encore de liste de défauts : n'invente AUCUN problème technique précis. Parle plutôt de clarifier l'offre, rassurer le visiteur, rendre le site plus simple sur mobile.
 
-Style : vouvoiement, ton direct et chaleureux. Évite le jargon marketing (voir liste dans l'autre prompt).
+Style : vouvoiement, ton direct et chaleureux. Évite le jargon marketing (voir liste dans l'autre prompt).${angleInstructions}
 
 Réponds UNIQUEMENT avec ce JSON :
 {"subject":"une ligne personnalisée avec le nom","body":"Email complet : Bonjour, développement en 2 courts paragraphes, proposition d'échange. Termine par Cordialement, puis [Votre prénom]. Utilise \\n pour les sauts de ligne."}`,

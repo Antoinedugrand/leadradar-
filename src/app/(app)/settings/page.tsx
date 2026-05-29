@@ -1,10 +1,35 @@
 import { Globe, Mail, Shield, ShoppingBag, SlidersHorizontal } from "lucide-react";
 
 import { AppTopbar } from "@/components/app/app-topbar";
+import { SubscriptionPanel } from "@/components/billing/subscription-panel";
+import { requirePageUser } from "@/lib/auth/require-user";
+import { getStripeEnv, isStripeConfigured } from "@/lib/env";
 import { getServerT } from "@/lib/i18n/server";
 
-export default async function SettingsPage() {
+interface SettingsPageProps {
+  searchParams: Promise<{ checkout?: string }>;
+}
+
+export default async function SettingsPage({ searchParams }: SettingsPageProps) {
   const { t } = await getServerT();
+  const { user, supabase } = await requirePageUser();
+  const { checkout } = await searchParams;
+
+  const { data: billing } = await supabase
+    .from("users")
+    .select("plan, subscription_status")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const checkoutMessage =
+    checkout === "success" || checkout === "canceled" ? checkout : null;
+
+  const stripePrices = isStripeConfigured()
+    ? {
+        monthly: getStripeEnv().STRIPE_PRICE_PRO_MONTHLY,
+        yearly: getStripeEnv().STRIPE_PRICE_PRO_YEARLY,
+      }
+    : null;
 
   const navItems = [
     { label: t("settings.senderAccount"), active: true, icon: Mail },
@@ -86,6 +111,16 @@ export default async function SettingsPage() {
                 </button>
               </div>
             </section>
+
+            {stripePrices ? (
+              <SubscriptionPanel
+                plan={billing?.plan}
+                subscriptionStatus={billing?.subscription_status}
+                monthlyPriceId={stripePrices.monthly}
+                yearlyPriceId={stripePrices.yearly}
+                checkoutMessage={checkoutMessage}
+              />
+            ) : null}
           </div>
         </div>
       </div>

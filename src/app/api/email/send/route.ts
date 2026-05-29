@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getServerEnv } from "@/lib/env";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { requireApiUser } from "@/lib/auth/require-user";
+import { getAppUrl, getServerEnv } from "@/lib/env";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -20,8 +21,11 @@ export async function POST(request: Request) {
     const env = getServerEnv();
     const resendApiKey = env.RESEND_API_KEY;
     const fromEmail = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
-    const appBaseUrl = process.env.APP_BASE_URL ?? "http://localhost:3000";
-    const supabase = getSupabaseServerClient();
+    const appBaseUrl = getAppUrl();
+    const auth = await requireApiUser();
+    if ("error" in auth) return auth.error;
+    const { supabase } = auth;
+    const admin = getSupabaseAdminClient();
 
     const unsubscribeUrl = `${appBaseUrl}/unsubscribe?prospectId=${payload.prospectId}`;
     const footer = `\n\n---\nSi vous ne souhaitez plus recevoir d'emails, cliquez ici: ${unsubscribeUrl}`;
@@ -51,7 +55,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: insertLogError } = await supabase.from("email_logs").insert({
+    const { error: insertLogError } = await admin.from("email_logs").insert({
       prospect_id: payload.prospectId,
       subject: payload.subject,
       body: bodyWithFooter,

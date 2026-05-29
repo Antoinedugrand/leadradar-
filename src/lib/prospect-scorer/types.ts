@@ -12,6 +12,7 @@ export interface WebsiteAnalysisResult {
   mobileFriendly: boolean;
   pageSpeedScore: number | null;
   hasSocialLinks: boolean;
+  socialLinks: import("@/lib/types").SocialLink[];
   outdatedTech: string[];
   brokenLinkCount: number;
   crawlErrorCount: number;
@@ -29,4 +30,5 @@ export interface ProspectScoreResult {
   score: number;
   breakdown: ScoreBreakdownItem[];
   label: ProspectScoreLabel;
+  socialLinks?: import("@/lib/types").SocialLink[];
 }

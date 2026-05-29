@@ -1,3 +1,5 @@
+export type ContactSource = "google" | "website" | "ai";
+
 export type ProspectStatus = "new" | "audited" | "emailed" | "replied" | "converted";
 
 /** Suivi commercial une fois le prospect marqué comme contacté. */
@@ -14,14 +16,31 @@ export interface ScoreBreakdownItem {
   triggered: boolean;
 }
 
+export interface SocialLink {
+  platform: string;
+  url: string;
+  label?: string;
+}
+
 export interface Prospect {
   id: string;
+  /** Owner auth.users id (migration 0010). */
+  user_id?: string | null;
   name: string;
   type: string | null;
   address: string | null;
   city: string | null;
   phone: string | null;
   email: string | null;
+  /** Origine de l'email (migration 0006). */
+  email_source?: ContactSource | null;
+  /** Origine du téléphone (migration 0006). */
+  phone_source?: ContactSource | null;
+  contacts_enriched_at?: string | null;
+  /** Liens réseaux sociaux extraits du site (migration 0007). */
+  social_links?: SocialLink[] | null;
+  /** Catégorie métier lisible (IA ou Google, migration 0008). */
+  business_type_label?: string | null;
   website_url: string | null;
   website_exists: boolean;
   audit_score: number | null;

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { requireApiUser } from "@/lib/auth/require-user";
 import { getServerEnv } from "@/lib/env";
+import { buildScoreUpdatePayload } from "@/lib/prospects/social-links-update";
 import { ProspectScorer } from "@/lib/prospect-scorer";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Prospect } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -15,7 +16,9 @@ interface RouteContext {
 export async function POST(_request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
-    const supabase = getSupabaseServerClient();
+    const auth = await requireApiUser();
+    if ("error" in auth) return auth.error;
+    const { supabase } = auth;
     const env = getServerEnv();
 
     const { data, error } = await supabase.from("prospects").select("*").eq("id", id).single();
@@ -32,17 +35,24 @@ export async function POST(_request: Request, context: RouteContext) {
       googleRating: prospect.google_rating ?? null,
     });
 
-    const { error: updateError } = await supabase
-      .from("prospects")
-      .update({
-        prospect_score: result.score,
-        score_breakdown: result.breakdown,
-        score_label: result.label,
-      })
-      .eq("id", id);
+    const updatePayload = buildScoreUpdatePayload(prospect, result);
+
+    const { error: updateError } = await supabase.from("prospects").update(updatePayload).eq("id", id);
 
     if (updateError) {
-      return NextResponse.json({ error: "Impossible de sauvegarder le score." }, { status: 500 });
+      const isMissingColumn = /column.*social_links/i.test(updateError.message);
+      if (isMissingColumn) {
+        const { social_links: _sl, ...fallbackPayload } = updatePayload;
+        const { error: fallbackError } = await supabase
+          .from("prospects")
+          .update(fallbackPayload)
+          .eq("id", id);
+        if (fallbackError) {
+          return NextResponse.json({ error: "Impossible de sauvegarder le score." }, { status: 500 });
+        }
+      } else {
+        return NextResponse.json({ error: "Impossible de sauvegarder le score." }, { status: 500 });
+      }
     }
 
     return NextResponse.json({

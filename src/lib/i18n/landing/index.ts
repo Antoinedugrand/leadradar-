@@ -4,12 +4,14 @@ import { useMemo } from "react";
 
 import { useLocale } from "@/lib/i18n/locale-provider";
 
+import type { Locale } from "@/lib/i18n/types";
+
 import { landingEn, type LandingCopy } from "./en";
 import { landingFr } from "./fr";
 
 export type { LandingCopy };
 
-export function getLandingCopy(locale: "en" | "fr"): LandingCopy {
+export function getLandingCopy(locale: Locale): LandingCopy {
   return locale === "fr" ? landingFr : landingEn;
 }
 

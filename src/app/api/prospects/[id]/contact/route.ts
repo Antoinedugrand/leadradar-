@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { requireApiUser } from "@/lib/auth/require-user";
 import type { ProspectStatus } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -48,7 +48,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       updates.emailed_at = null;
     }
 
-    const supabase = getSupabaseServerClient();
+    const auth = await requireApiUser();
+    if ("error" in auth) return auth.error;
+    const { supabase } = auth;
     const { error } = await supabase.from("prospects").update(updates).eq("id", id);
 
     if (error) {

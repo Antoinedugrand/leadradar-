@@ -54,7 +54,7 @@ export function Pricing({ copy }: { copy: LandingCopy }) {
             ))}
           </ul>
 
-          <a className="btn btn-gradient btn-lg" href="/dashboard" style={{ width: "100%", justifyContent: "center" }}>
+          <a className="btn btn-gradient btn-lg" href="/signup" style={{ width: "100%", justifyContent: "center" }}>
             {copy.hero.ctaPrimary}
             <ArrowRight size={16} aria-hidden="true" />
           </a>

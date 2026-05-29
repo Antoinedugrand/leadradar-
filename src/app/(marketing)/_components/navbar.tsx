@@ -37,7 +37,7 @@ export function Navbar() {
         </div>
         <div className="nav-right">
           <LanguageSwitch />
-          <Link className="btn btn-secondary btn-sm" href="/dashboard">
+          <Link className="btn btn-secondary btn-sm" href="/login">
             {t.nav.login}
           </Link>
           <a className="btn btn-gradient btn-sm" href="#pricing">
@@ -61,7 +61,7 @@ export function Navbar() {
             {link.label}
           </a>
         ))}
-        <Link href="/dashboard" onClick={() => setMenuOpen(false)}>
+        <Link href="/login" onClick={() => setMenuOpen(false)}>
           {t.nav.login}
         </Link>
         <LanguageSwitch showOnMobile />

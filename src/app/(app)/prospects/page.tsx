@@ -1,16 +1,14 @@
-import Link from "next/link";
-
 import { AppTopbar } from "@/components/app/app-topbar";
 import { ProspectsTopbarActions } from "@/components/app/prospects-topbar-actions";
 import { ProspectsListClient } from "@/components/prospects-list-client";
+import { requirePageUser } from "@/lib/auth/require-user";
 import { getServerT } from "@/lib/i18n/server";
 import { sortProspectsByScore } from "@/lib/prospect-scorer";
-import { Prospect } from "@/lib/types";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import type { Prospect } from "@/lib/types";
 
 export default async function ProspectsPage() {
   const { t } = await getServerT();
-  const supabase = getSupabaseServerClient();
+  const { supabase } = await requirePageUser();
   const { data, error } = await supabase
     .from("prospects")
     .select("*")

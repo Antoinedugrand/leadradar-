@@ -1,3 +1,5 @@
+import { pickBestPlaceType } from "@/lib/business-type";
+
 function normalizeCity(address: string | undefined): string | null {
   if (!address) {
     return null;
@@ -15,7 +17,7 @@ export interface ClientPlaceProspect {
   address: string | null;
   city: string | null;
   phone: string | null;
-  email: null;
+  email: string | null;
   website_url: string | null;
   website_exists: boolean;
   audit_score: null;
@@ -51,7 +53,7 @@ function placeToProspect(place: google.maps.places.PlaceResult): ClientPlacePros
 
   return {
     name,
-    type: place.types?.[0] ?? null,
+    type: pickBestPlaceType(place.types),
     address: place.formatted_address ?? null,
     city: normalizeCity(place.formatted_address),
     phone: place.formatted_phone_number ?? null,

@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { requireApiUser } from "@/lib/auth/require-user";
+import { mergeBusinessTypeLabel, pickBestPlaceType } from "@/lib/business-type";
+import { enrichProspectsBatch, mergeContactFields } from "@/lib/contact-enrichment";
 import { getServerEnv } from "@/lib/env";
 import { geocodeAddress, normalizeLocationQuery, radiusKmForCityBounds } from "@/lib/geo-search";
+import { getServerLocale } from "@/lib/i18n/server";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Prospect } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -30,8 +33,6 @@ interface PlaceDetailsResponse {
   };
 }
 
-const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-
 function normalizeCity(address: string | undefined): string | null {
   if (!address) {
     return null;
@@ -43,68 +44,15 @@ function normalizeCity(address: string | undefined): string | null {
   return chunks[chunks.length - 2]?.trim() ?? null;
 }
 
-function normalizeWebsiteUrl(url: string): string {
-  if (url.startsWith("http://") || url.startsWith("https://")) {
-    return url;
-  }
-  return `https://${url}`;
-}
-
-function extractEmailsFromText(content: string): string[] {
-  const found = content.match(EMAIL_REGEX) ?? [];
-  return [...new Set(found.map((email) => email.toLowerCase()))];
-}
-
-async function findProspectEmail(websiteUrl: string): Promise<string | null> {
-  const baseUrl = normalizeWebsiteUrl(websiteUrl);
-  const urlsToTry = [
-    baseUrl,
-    `${baseUrl.replace(/\/$/, "")}/contact`,
-    `${baseUrl.replace(/\/$/, "")}/contactez-nous`,
-    `${baseUrl.replace(/\/$/, "")}/nous-contacter`,
-  ];
-
-  for (const url of urlsToTry) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-      const response = await fetch(url, {
-        method: "GET",
-        signal: controller.signal,
-        headers: { "User-Agent": "LeadSiteBot/1.0 (+https://leadsite.local)" },
-      });
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        continue;
-      }
-
-      const html = await response.text();
-      const emails = extractEmailsFromText(html).filter(
-        (email) =>
-          !email.endsWith(".png") &&
-          !email.endsWith(".jpg") &&
-          !email.endsWith(".jpeg") &&
-          !email.endsWith(".webp"),
-      );
-      if (emails.length > 0) {
-        return emails[0];
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return null;
-}
-
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const payload = searchSchema.parse(body);
     const env = getServerEnv();
     const googleApiKey = env.GOOGLE_PLACES_API_KEY;
-    const supabase = getSupabaseServerClient();
+    const auth = await requireApiUser();
+    if ("error" in auth) return auth.error;
+    const { supabase, user } = auth;
 
     if (!enforceRateLimit("google-places-search")) {
       return NextResponse.json(
@@ -180,14 +128,14 @@ export async function POST(request: Request) {
         const detailsData = (await detailsResponse.json()) as PlaceDetailsResponse;
         const item = detailsData.result;
         const websiteUrl = item.website ?? null;
-        const email = websiteUrl ? await findProspectEmail(websiteUrl) : null;
+
         return {
           name: item.name,
-          type: item.types?.[0] ?? null,
+          type: pickBestPlaceType(item.types),
           address: item.formatted_address ?? null,
           city: normalizeCity(item.formatted_address),
           phone: item.formatted_phone_number ?? null,
-          email,
+          email: null as string | null,
           website_url: websiteUrl,
           website_exists: Boolean(websiteUrl),
           audit_score: null,
@@ -198,31 +146,114 @@ export async function POST(request: Request) {
           google_review_count: item.user_ratings_total ?? null,
           audit_issues: null,
           screenshot_url: null,
-          status: "new",
+          status: "new" as const,
           google_place_id: placeId,
         };
       }),
     );
 
-    const prospectsToSave = placeDetails.filter((item) => item !== null);
+    const rawProspects = placeDetails.filter((item) => item !== null);
+
+    const placeIds = rawProspects.map((item) => item.google_place_id);
+    const locale = await getServerLocale();
+    const { data: existingRows } = await supabase
+      .from("prospects")
+      .select(
+        "google_place_id, email, phone, email_source, phone_source, contacts_enriched_at, social_links, business_type_label",
+      )
+      .eq("user_id", user.id)
+      .in("google_place_id", placeIds);
+
+    const existingByPlaceId = new Map(
+      (existingRows ?? []).map((row) => [row.google_place_id as string, row]),
+    );
+
+    const enrichInputs = rawProspects.map((item) => ({
+      businessName: item.name,
+      websiteUrl: item.website_url,
+      googlePhone: item.phone,
+      google_place_id: item.google_place_id,
+      googleType: item.type,
+      address: item.address,
+      city: item.city,
+      existingBusinessTypeLabel: existingByPlaceId.get(item.google_place_id)?.business_type_label,
+      locale,
+    }));
+
+    const enrichedByPlaceId = new Map(
+      (await enrichProspectsBatch(enrichInputs)).map((item) => [item.google_place_id!, item]),
+    );
+
+    const prospectsToSave = rawProspects.map((incoming) => {
+      const existing = existingByPlaceId.get(incoming.google_place_id);
+      const enriched = enrichedByPlaceId.get(incoming.google_place_id);
+
+      const merged = mergeContactFields(existing, {
+        email: enriched?.email ?? null,
+        phone: enriched?.phone ?? incoming.phone ?? null,
+        email_source: enriched?.emailSource ?? null,
+        phone_source:
+          enriched?.phoneSource ?? (incoming.phone && !enriched ? "google" : null),
+        contacts_enriched_at: enriched?.enrichedAt ?? null,
+        social_links: enriched?.socialLinks?.length ? enriched.socialLinks : null,
+      });
+
+      return {
+        ...incoming,
+        user_id: user.id,
+        email: merged.email ?? null,
+        phone: merged.phone ?? null,
+        email_source: merged.email_source ?? null,
+        phone_source: merged.phone_source ?? null,
+        contacts_enriched_at: merged.contacts_enriched_at ?? null,
+        social_links: merged.social_links ?? null,
+        business_type_label: mergeBusinessTypeLabel(existing, enriched?.businessTypeLabel),
+      };
+    });
 
     let savedProspects: Prospect[] = [];
 
     if (prospectsToSave.length > 0) {
       const { error } = await supabase
         .from("prospects")
-        .upsert(prospectsToSave, { onConflict: "google_place_id" });
+        .upsert(prospectsToSave, { onConflict: "user_id,google_place_id" });
+
       if (error) {
-        return NextResponse.json(
-          { error: "Erreur Supabase lors de la sauvegarde des prospects." },
-          { status: 500 },
+        const isMissingColumn = /column.*(email_source|phone_source|contacts_enriched_at|social_links|business_type_label)/i.test(
+          error.message,
         );
+        if (isMissingColumn) {
+          const fallbackRows = prospectsToSave.map(
+            ({
+              email_source: _es,
+              phone_source: _ps,
+              contacts_enriched_at: _ce,
+              social_links: _sl,
+              business_type_label: _bt,
+              ...row
+            }) => row,
+          );
+          const { error: fallbackError } = await supabase
+            .from("prospects")
+            .upsert(fallbackRows, { onConflict: "user_id,google_place_id" });
+          if (fallbackError) {
+            return NextResponse.json(
+              { error: "Erreur Supabase lors de la sauvegarde des prospects." },
+              { status: 500 },
+            );
+          }
+        } else {
+          return NextResponse.json(
+            { error: "Erreur Supabase lors de la sauvegarde des prospects." },
+            { status: 500 },
+          );
+        }
       }
 
-      const placeIds = prospectsToSave.map((item) => item.google_place_id);
       const { data: fetched } = await supabase
         .from("prospects")
         .select("*")
+        .eq("user_id", user.id)
         .in("google_place_id", placeIds)
         .order("created_at", { ascending: false });
 

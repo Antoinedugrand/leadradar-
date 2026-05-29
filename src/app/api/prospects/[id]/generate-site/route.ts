@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { requireApiUser } from "@/lib/auth/require-user";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { generateProspectSite } from "@/lib/site-generator/generate-prospect-site";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Prospect } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -27,7 +27,9 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Identifiant invalide." }, { status: 400 });
   }
 
-  const supabase = getSupabaseServerClient();
+  const auth = await requireApiUser();
+  if ("error" in auth) return auth.error;
+  const { supabase } = auth;
   const { data, error } = await supabase
     .from("prospects")
     .select("id, generated_site_html, generated_site_at, website_exists, website_url")
@@ -79,7 +81,9 @@ export async function POST(request: Request, context: RouteContext) {
     regenerate = false;
   }
 
-  const supabase = getSupabaseServerClient();
+  const auth = await requireApiUser();
+  if ("error" in auth) return auth.error;
+  const { supabase } = auth;
   const { data, error } = await supabase.from("prospects").select("*").eq("id", idParse.data).maybeSingle();
 
   if (error || !data) {

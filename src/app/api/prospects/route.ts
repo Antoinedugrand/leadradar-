@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { requireApiUser } from "@/lib/auth/require-user";
 
 export const runtime = "nodejs";
 
@@ -22,7 +22,9 @@ export async function GET(request: Request) {
       type: searchParams.get("type") ?? undefined,
     });
 
-    const supabase = getSupabaseServerClient();
+    const auth = await requireApiUser();
+    if ("error" in auth) return auth.error;
+    const { supabase } = auth;
     const from = (payload.page - 1) * payload.pageSize;
     const to = from + payload.pageSize - 1;
 

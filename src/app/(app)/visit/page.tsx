@@ -1,29 +1,13 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import { AppTopbar } from "@/components/app/app-topbar";
+import { VisitPageClient } from "@/app/(app)/visit/visit-page-client";
 import { Button } from "@/components/ui/button";
 import { getServerT } from "@/lib/i18n/server";
+import { normalizeWebsiteUrl } from "@/lib/normalize-website-url";
 
 interface VisitPageProps {
   searchParams: Promise<{ url?: string }>;
-}
-
-function normalizeExternalUrl(value: string): string | null {
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-      return parsed.toString();
-    }
-    return null;
-  } catch {
-    try {
-      const parsed = new URL(`https://${value}`);
-      return parsed.toString();
-    } catch {
-      return null;
-    }
-  }
 }
 
 export default async function VisitPage({ searchParams }: VisitPageProps) {
@@ -45,7 +29,7 @@ export default async function VisitPage({ searchParams }: VisitPageProps) {
     );
   }
 
-  const safeUrl = normalizeExternalUrl(rawUrl);
+  const safeUrl = normalizeWebsiteUrl(rawUrl);
   if (!safeUrl) {
     return (
       <>
@@ -60,5 +44,5 @@ export default async function VisitPage({ searchParams }: VisitPageProps) {
     );
   }
 
-  redirect(safeUrl);
+  return <VisitPageClient safeUrl={safeUrl} />;
 }

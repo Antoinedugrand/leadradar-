@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { requireApiUser } from "@/lib/auth/require-user";
 import { getServerEnv } from "@/lib/env";
+import { buildScoreUpdatePayload } from "@/lib/prospects/social-links-update";
 import { ProspectScorer } from "@/lib/prospect-scorer";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Prospect } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -17,7 +18,9 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { prospectIds } = bodySchema.parse(body);
-    const supabase = getSupabaseServerClient();
+    const auth = await requireApiUser();
+    if ("error" in auth) return auth.error;
+    const { supabase } = auth;
     const env = getServerEnv();
     const scorer = new ProspectScorer(env.GOOGLE_PLACES_API_KEY);
 
@@ -37,17 +40,27 @@ export async function POST(request: Request) {
         googleRating: prospect.google_rating ?? null,
       });
 
+      const updatePayload = buildScoreUpdatePayload(prospect, result);
       const { error: updateError } = await supabase
         .from("prospects")
-        .update({
-          prospect_score: result.score,
-          score_breakdown: result.breakdown,
-          score_label: result.label,
-        })
+        .update(updatePayload)
         .eq("id", prospect.id);
 
       if (!updateError) {
         updatedIds.push(prospect.id);
+        continue;
+      }
+
+      const isMissingColumn = /column.*social_links/i.test(updateError.message);
+      if (isMissingColumn) {
+        const { social_links: _sl, ...fallbackPayload } = updatePayload;
+        const { error: fallbackError } = await supabase
+          .from("prospects")
+          .update(fallbackPayload)
+          .eq("id", prospect.id);
+        if (!fallbackError) {
+          updatedIds.push(prospect.id);
+        }
       }
     }
 

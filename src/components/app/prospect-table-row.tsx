@@ -8,6 +8,7 @@ import { ContactStateDropdown } from "@/components/contact-state-dropdown";
 import { EmailDialog } from "@/components/email-dialog";
 import { GenerateSiteDialog } from "@/components/generate-site-dialog";
 import { GoogleRatingBadge } from "@/components/google-rating-badge";
+import { ContactEmailCell, ContactPhoneCell } from "@/components/app/contact-table-cells";
 import { ProspectAvatar } from "@/components/app/prospect-avatar";
 import { ProspectScoreBadge } from "@/components/prospect-score-badge";
 import { StatusBadge } from "@/components/app/status-badge";
@@ -49,12 +50,12 @@ export function ProspectTableRow({ prospect }: ProspectTableRowProps) {
       </td>
       <td>
         <div className="text-[13px] text-[var(--slate-800)]">{prospect.address ?? "—"}</div>
-        {prospect.phone ? (
-          <div className="lr-mono mt-0.5 text-[11px] text-[var(--slate-500)]">{prospect.phone}</div>
-        ) : null}
       </td>
       <td>
-        <div className="lr-mono text-xs text-[var(--slate-700)]">{prospect.email ?? "—"}</div>
+        <ContactPhoneCell phone={prospect.phone} source={prospect.phone_source} />
+      </td>
+      <td>
+        <ContactEmailCell email={prospect.email} source={prospect.email_source} />
       </td>
       <td>
         {!prospect.website_exists || !prospect.website_url ? (

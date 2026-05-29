@@ -24,7 +24,7 @@ export function AuditProspectButton({
   iconOnly = false,
 }: AuditProspectButtonProps) {
   const router = useRouter();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +39,7 @@ export function AuditProspectButton({
       const response = await fetch("/api/audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prospectId, websiteUrl }),
+        body: JSON.stringify({ prospectId, websiteUrl, language: locale }),
       });
 
       const payload = (await response.json()) as { error?: string };

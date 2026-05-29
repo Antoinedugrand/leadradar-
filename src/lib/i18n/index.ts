@@ -1,9 +1,15 @@
 import { messages as enMessages } from "./en";
 import { messages as frMessages } from "./fr";
-import type { Locale } from "./types";
+import { DEFAULT_LOCALE, LOCALES, type Locale } from "./types";
 
 export type { Locale, TranslationKey } from "./types";
-export { DEFAULT_LOCALE, LOCALE_COOKIE, LOCALES } from "./types";
+export {
+  DEFAULT_LOCALE,
+  LOCALE_BCP47,
+  LOCALE_COOKIE,
+  LOCALE_OPTIONS,
+  LOCALES,
+} from "./types";
 
 export type Messages = typeof enMessages;
 export type TFunction = (
@@ -14,6 +20,10 @@ export type TFunction = (
 const dictionaries: Record<Locale, Record<keyof Messages, string>> = {
   en: enMessages,
   fr: frMessages,
+  es: enMessages,
+  pt: enMessages,
+  zh: enMessages,
+  hi: enMessages,
 };
 
 export function createT(locale: Locale): TFunction {
@@ -34,7 +44,10 @@ export function getMessages(locale: Locale): Record<keyof Messages, string> {
 }
 
 export function parseLocale(value: string | undefined | null): Locale {
-  return value === "fr" ? "fr" : "en";
+  if (value && LOCALES.includes(value as Locale)) {
+    return value as Locale;
+  }
+  return DEFAULT_LOCALE;
 }
 
 export function placeTypeLabel(t: TFunction, value: string): string {

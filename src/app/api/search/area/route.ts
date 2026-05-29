@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { pickBestPlaceType } from "@/lib/business-type";
+import { requireApiUser } from "@/lib/auth/require-user";
 import { getServerEnv } from "@/lib/env";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { Prospect } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -65,7 +66,9 @@ export async function POST(request: Request) {
     const payload = schema.parse(body);
     const env = getServerEnv();
     const googleApiKey = env.GOOGLE_PLACES_API_KEY;
-    const supabase = getSupabaseServerClient();
+    const auth = await requireApiUser();
+    if ("error" in auth) return auth.error;
+    const { supabase, user } = auth;
 
     const uniquePlaceIds = new Set<string>();
 
@@ -112,7 +115,7 @@ export async function POST(request: Request) {
         return {
           save: {
             name: item.name,
-            type: item.types?.[0] ?? null,
+            type: pickBestPlaceType(item.types),
             address: item.formatted_address ?? null,
             city: normalizeCity(item.formatted_address),
             phone: item.formatted_phone_number ?? null,
@@ -143,7 +146,7 @@ export async function POST(request: Request) {
     );
 
     const validDetails = placeDetails.filter((item) => item !== null);
-    const prospectsToSave = validDetails.map((item) => item.save);
+    const prospectsToSave = validDetails.map((item) => ({ ...item.save, user_id: user.id }));
     let prospectsForMap: MapProspectPayload[] = validDetails.map((item) => ({
       ...item.map,
       audit_score: null,
@@ -154,7 +157,7 @@ export async function POST(request: Request) {
     if (prospectsToSave.length > 0) {
       const { error } = await supabase
         .from("prospects")
-        .upsert(prospectsToSave, { onConflict: "google_place_id" });
+        .upsert(prospectsToSave, { onConflict: "user_id,google_place_id" });
       if (error) {
         return NextResponse.json({ error: "Erreur Supabase pendant la sauvegarde." }, { status: 500 });
       }
@@ -163,6 +166,7 @@ export async function POST(request: Request) {
       const { data: savedProspects, error: fetchError } = await supabase
         .from("prospects")
         .select("*")
+        .eq("user_id", user.id)
         .in("google_place_id", placeIds)
         .order("created_at", { ascending: false });
 

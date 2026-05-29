@@ -1,4 +1,8 @@
+import { extractSocialLinksFromHtml } from "@/lib/contact-enrichment/extract-social";
 import type { WebsiteAnalysisResult } from "@/lib/prospect-scorer/types";
+import type { SocialLink } from "@/lib/types";
+import { fetchPageSpeedScore } from "@/lib/website-fetch/pagespeed";
+import { BROWSER_FETCH_HEADERS, probeWebsite } from "@/lib/website-fetch/probe-website";
 
 const SOCIAL_PATTERNS = [
   /facebook\.com\//i,
@@ -51,7 +55,7 @@ async function checkBrokenLinks(links: string[]): Promise<number> {
           method: "HEAD",
           signal: controller.signal,
           redirect: "follow",
-          headers: { "User-Agent": "LeadSiteBot/1.0" },
+          headers: BROWSER_FETCH_HEADERS,
         });
         if (!response.ok && response.status !== 405) {
           broken += 1;
@@ -67,62 +71,17 @@ async function checkBrokenLinks(links: string[]): Promise<number> {
   return broken;
 }
 
-async function fetchPageSpeedScore(url: string, apiKey: string): Promise<number | null> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
-
-  try {
-    const endpoint = new URL("https://www.googleapis.com/pagespeedonline/v5/runPagespeed");
-    endpoint.searchParams.set("url", url);
-    endpoint.searchParams.set("strategy", "mobile");
-    endpoint.searchParams.set("category", "performance");
-    endpoint.searchParams.set("key", apiKey);
-
-    const response = await fetch(endpoint.toString(), { signal: controller.signal });
-    if (!response.ok) return null;
-
-    const data = (await response.json()) as {
-      lighthouseResult?: { categories?: { performance?: { score?: number } } };
-    };
-    const raw = data.lighthouseResult?.categories?.performance?.score;
-    if (typeof raw !== "number") return null;
-    return Math.round(raw * 100);
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 export async function analyzeWebsite(
   url: string,
   options?: { pageSpeedApiKey?: string },
 ): Promise<WebsiteAnalysisResult> {
   const parsed = new URL(url);
   const https = parsed.protocol === "https:";
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
-
-  let html = "";
-  let reachable = false;
-
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      signal: controller.signal,
-      redirect: "follow",
-      headers: { "User-Agent": "LeadSiteBot/1.0 (+https://leadsite.local)" },
-    });
-    reachable = response.ok;
-    if (reachable) {
-      html = await response.text();
-    }
-  } catch {
-    reachable = false;
-  } finally {
-    clearTimeout(timeout);
-  }
+  const probe = await probeWebsite(url);
+  const probedUrl = probe.finalUrl || url;
+  const html = probe.html ?? "";
+  const reachable = probe.reachability !== "unreachable";
+  const hasHtml = html.trim().length > 0;
 
   if (!reachable) {
     return {
@@ -131,25 +90,46 @@ export async function analyzeWebsite(
       mobileFriendly: false,
       pageSpeedScore: null,
       hasSocialLinks: false,
+      socialLinks: [],
       outdatedTech: [],
       brokenLinkCount: 0,
       crawlErrorCount: 1,
     };
   }
 
+  if (!hasHtml) {
+    let pageSpeedScore: number | null = null;
+    if (options?.pageSpeedApiKey) {
+      pageSpeedScore = await fetchPageSpeedScore(probedUrl, options.pageSpeedApiKey);
+    }
+
+    return {
+      reachable: true,
+      https,
+      mobileFriendly: false,
+      pageSpeedScore,
+      hasSocialLinks: false,
+      socialLinks: [],
+      outdatedTech: [],
+      brokenLinkCount: 0,
+      crawlErrorCount: probe.reachability === "blocked" ? 0 : 1,
+    };
+  }
+
   const mobileFriendly = /<meta[^>]+name=["']viewport["'][^>]+content=/i.test(html);
-  const hasSocialLinks = SOCIAL_PATTERNS.some((pattern) => pattern.test(html));
+  const socialLinks: SocialLink[] = extractSocialLinksFromHtml(html, probedUrl);
+  const hasSocialLinks = socialLinks.length > 0 || SOCIAL_PATTERNS.some((pattern) => pattern.test(html));
   const outdatedTech = OUTDATED_PATTERNS.filter(({ pattern }) => pattern.test(html)).map(
     ({ label }) => label,
   );
 
-  const links = extractLinks(html, url);
+  const links = extractLinks(html, probedUrl);
   const brokenLinkCount = links.length > 0 ? await checkBrokenLinks(links) : 0;
-  const crawlErrorCount = brokenLinkCount + (reachable ? 0 : 1);
+  const crawlErrorCount = brokenLinkCount + (probe.reachability === "unreachable" ? 1 : 0);
 
   let pageSpeedScore: number | null = null;
   if (options?.pageSpeedApiKey) {
-    pageSpeedScore = await fetchPageSpeedScore(url, options.pageSpeedApiKey);
+    pageSpeedScore = await fetchPageSpeedScore(probedUrl, options.pageSpeedApiKey);
   }
 
   return {
@@ -158,6 +138,7 @@ export async function analyzeWebsite(
     mobileFriendly,
     pageSpeedScore,
     hasSocialLinks,
+    socialLinks,
     outdatedTech,
     brokenLinkCount,
     crawlErrorCount,

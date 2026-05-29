@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { requireApiUser } from "@/lib/auth/require-user";
 import type { ProspectStatus } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -22,7 +22,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { pipeline } = schema.parse(body);
     const { id } = await context.params;
 
-    const supabase = getSupabaseServerClient();
+    const auth = await requireApiUser();
+    if ("error" in auth) return auth.error;
+    const { supabase } = auth;
     const { data: row, error: fetchError } = await supabase
       .from("prospects")
       .select("status")

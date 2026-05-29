@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Check, Copy, Gauge, Loader2, Mail, Send, Sparkles, Wand2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, Copy, Gauge, Loader2, Mail, Plus, Send, Sparkles, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -13,6 +13,8 @@ import {
   LrDialogTrigger,
 } from "@/components/app/lr-dialog";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { getEmailVariables } from "@/lib/pitch-email/email-variables";
+import type { PitchAngle } from "@/lib/pitch-email/generate-pitch";
 import type { Prospect } from "@/lib/types";
 
 interface EmailDialogProps {
@@ -24,6 +26,8 @@ interface PitchEmail {
   subject: string;
   body: string;
   cached?: boolean;
+  fallback?: boolean;
+  angle?: PitchAngle;
 }
 
 export function EmailDialog({ prospect, trigger }: EmailDialogProps) {
@@ -31,44 +35,96 @@ export function EmailDialog({ prospect, trigger }: EmailDialogProps) {
   const [open, setOpen] = useState(false);
   const [pitch, setPitch] = useState<PitchEmail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editedBody, setEditedBody] = useState("");
   const [editedSubject, setEditedSubject] = useState("");
   const [copied, setCopied] = useState<"subject" | "body" | "full" | null>(null);
+  const [variablesOpen, setVariablesOpen] = useState(false);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const variablesRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) {
-      setPitch(null);
-      return;
+  const emailVariables = getEmailVariables(prospect, locale);
+
+  const applyPitch = useCallback((data: PitchEmail) => {
+    setPitch(data);
+    setEditedSubject(data.subject);
+    setEditedBody(data.body);
+    if (data.fallback) {
+      toast.info(t("emailDialog.fallback"));
     }
-    if (pitch) return;
+  }, [t]);
 
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
+  const loadPitch = useCallback(
+    async (regenerate = false) => {
+      if (regenerate) {
+        setRegenerating(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
+
       try {
-        const res = await fetch(`/api/prospects/${prospect.id}/pitch-email?language=${locale}`);
+        const res = regenerate
+          ? await fetch(`/api/prospects/${prospect.id}/pitch-email?language=${locale}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ regenerate: true }),
+            })
+          : await fetch(`/api/prospects/${prospect.id}/pitch-email?language=${locale}`);
+
         const data = (await res.json()) as PitchEmail & { error?: string };
-        if (cancelled) return;
         if (!res.ok) {
           setError(data.error ?? t("emailDialog.generateError"));
           return;
         }
-        setPitch(data);
-        setEditedSubject(data.subject);
-        setEditedBody(data.body);
+        applyPitch(data);
       } catch {
-        if (!cancelled) setError(t("common.networkError"));
+        setError(t("common.networkError"));
       } finally {
-        if (!cancelled) setLoading(false);
+        if (regenerate) {
+          setRegenerating(false);
+        } else {
+          setLoading(false);
+        }
+      }
+    },
+    [applyPitch, locale, prospect.id, t],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      setPitch(null);
+      setVariablesOpen(false);
+      return;
+    }
+    if (pitch) return;
+
+    void loadPitch(false);
+  }, [open, pitch, loadPitch]);
+
+  useEffect(() => {
+    if (!variablesOpen) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!variablesRef.current?.contains(event.target as Node)) {
+        setVariablesOpen(false);
       }
     }
-    void load();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setVariablesOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
-      cancelled = true;
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open, pitch, prospect.id, locale, t]);
+  }, [variablesOpen]);
 
   async function copy(label: "subject" | "body" | "full", text: string) {
     try {
@@ -79,6 +135,34 @@ export function EmailDialog({ prospect, trigger }: EmailDialogProps) {
     } catch {
       toast.error(t("emailDialog.copyFailed"));
     }
+  }
+
+  async function copyVariableValue(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(t("emailDialog.copiedClipboard"));
+    } catch {
+      toast.error(t("emailDialog.copyFailed"));
+    }
+  }
+
+  function insertAtCursor(text: string) {
+    const textarea = bodyRef.current;
+    if (!textarea) {
+      setEditedBody((current) => `${current}${text}`);
+      return;
+    }
+
+    const start = textarea.selectionStart ?? editedBody.length;
+    const end = textarea.selectionEnd ?? editedBody.length;
+    const next = `${editedBody.slice(0, start)}${text}${editedBody.slice(end)}`;
+    setEditedBody(next);
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const cursor = start + text.length;
+      textarea.setSelectionRange(cursor, cursor);
+    });
   }
 
   const fullMail =
@@ -134,7 +218,66 @@ export function EmailDialog({ prospect, trigger }: EmailDialogProps) {
                 >
                   <Gauge size={11} /> {t("emailDialog.contextAudit")}
                 </span>
-                <span className="lr-pill">{t("emailDialog.variablesAi")}</span>
+
+                <div ref={variablesRef} className="relative">
+                  <button
+                    type="button"
+                    className="lr-pill cursor-pointer"
+                    aria-expanded={variablesOpen}
+                    onClick={() => setVariablesOpen((current) => !current)}
+                  >
+                    {t("emailDialog.variablesAi")}
+                  </button>
+
+                  {variablesOpen ? (
+                    <div
+                      className="absolute left-0 top-[calc(100%+6px)] z-50 min-w-[320px] rounded-[12px] border border-[var(--slate-200)] bg-white p-3 shadow-lg"
+                      role="dialog"
+                      aria-label={t("emailDialog.variablesTitle")}
+                    >
+                      <div className="mb-2 text-xs font-semibold text-[var(--slate-700)]">
+                        {t("emailDialog.variablesTitle")}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {emailVariables.map((variable) => (
+                          <div
+                            key={variable.token}
+                            className="rounded-[8px] border border-[var(--slate-200)] bg-[var(--slate-50)] p-2.5"
+                          >
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <span className="font-mono text-[11px] text-[var(--indigo)]">
+                                {variable.token}
+                              </span>
+                              <span className="text-[11px] text-[var(--slate-500)]">
+                                {variable.label}
+                              </span>
+                            </div>
+                            <p className="mb-2 text-[12px] leading-snug text-[var(--slate-800)]">
+                              {variable.value}
+                            </p>
+                            <div className="flex gap-1.5">
+                              <button
+                                type="button"
+                                className="lr-btn lr-btn-secondary lr-btn-sm"
+                                onClick={() => insertAtCursor(variable.token)}
+                              >
+                                <Plus size={11} /> {t("emailDialog.insertVariable")}
+                              </button>
+                              <button
+                                type="button"
+                                className="lr-btn lr-btn-ghost lr-btn-sm"
+                                onClick={() => void copyVariableValue(variable.value)}
+                              >
+                                <Copy size={11} /> {t("emailDialog.copyVariable")}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
                 {hasDemo ? (
                   <span
                     className="lr-pill"
@@ -158,6 +301,7 @@ export function EmailDialog({ prospect, trigger }: EmailDialogProps) {
 
               <label className="lr-label">{t("detail.message")}</label>
               <textarea
+                ref={bodyRef}
                 className="lr-input lr-textarea-mono min-h-[220px] text-[13px]"
                 value={editedBody}
                 onChange={(event) => setEditedBody(event.target.value)}
@@ -170,8 +314,18 @@ export function EmailDialog({ prospect, trigger }: EmailDialogProps) {
             </LrDialogBody>
 
             <LrDialogFoot>
-              <button type="button" className="lr-btn lr-btn-ghost" disabled>
-                <Wand2 size={13} /> {t("emailEditor.regenerateAi")}
+              <button
+                type="button"
+                className="lr-btn lr-btn-ghost"
+                disabled={regenerating}
+                onClick={() => void loadPitch(true)}
+              >
+                {regenerating ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Wand2 size={13} />
+                )}{" "}
+                {regenerating ? t("emailDialog.regenerating") : t("emailEditor.regenerateAi")}
               </button>
               <span className="spacer" />
               <button
