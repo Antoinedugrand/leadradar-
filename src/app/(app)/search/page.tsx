@@ -5,6 +5,7 @@ import { FormEvent, useState } from "react";
 import { Loader2, MapPin, Search } from "lucide-react";
 
 import { AppTopbar } from "@/components/app/app-topbar";
+import { CityPlaceAutocomplete } from "@/components/app/city-place-autocomplete";
 import { ProspectsResultsTable } from "@/components/prospects-results-table";
 import { PLACE_TYPE_VALUES, placeTypeLabel } from "@/lib/i18n";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -78,19 +79,16 @@ export default function SearchPage() {
           <label className="lr-label" htmlFor="location">
             {t("search.locationLabel")}
           </label>
-          <div className="lr-input-group mb-1.5">
-            <span className="lr-input-ico">
-              <MapPin size={16} />
-            </span>
-            <input
-              id="location"
-              className="lr-input"
-              value={location}
-              onChange={(event) => setLocation(event.target.value)}
-              required
-              placeholder={t("search.locationPlaceholder")}
-            />
-          </div>
+          <CityPlaceAutocomplete
+            id="location"
+            className="mb-1.5"
+            value={location}
+            onChange={setLocation}
+            onSelect={(selection) => setLocation(selection.description)}
+            placeholder={t("search.locationPlaceholder")}
+            required
+            icon={<MapPin size={16} />}
+          />
           <p className="lr-hint">{t("search.locationHint")}</p>
 
           <label className="lr-label mt-5">{t("search.placeTypeLabel")}</label>

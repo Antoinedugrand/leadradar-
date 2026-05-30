@@ -109,3 +109,41 @@ export function geocodeStatusToMessageKey(status: string): string {
   if (status === "OVER_QUERY_LIMIT") return "map.geocodeQuota";
   return "map.geocodeError";
 }
+
+export async function geocodePlaceById(
+  map: google.maps.Map,
+  placeId: string,
+): Promise<ClientGeocodeOutcome> {
+  const ready = await waitForGoogleMaps();
+  if (!ready) {
+    return { ok: false, status: "MAPS_NOT_LOADED" };
+  }
+
+  if (!google.maps.places?.PlacesService) {
+    return { ok: false, status: "MAPS_NOT_LOADED" };
+  }
+
+  return new Promise((resolve) => {
+    const service = new google.maps.places.PlacesService(map);
+    service.getDetails(
+      { placeId, fields: ["geometry", "formatted_address", "name"] },
+      (place, status) => {
+        if (status !== google.maps.places.PlacesServiceStatus.OK || !place?.geometry?.location) {
+          resolve({ ok: false, status });
+          return;
+        }
+
+        const location = place.geometry.location;
+        resolve({
+          ok: true,
+          result: {
+            location: { lat: location.lat(), lng: location.lng() },
+            bounds: place.geometry.bounds ? boundsFromGoogle(place.geometry.bounds) : undefined,
+            viewport: place.geometry.viewport ? boundsFromGoogle(place.geometry.viewport) : undefined,
+            formattedAddress: place.formatted_address,
+          },
+        });
+      },
+    );
+  });
+}

@@ -8,7 +8,7 @@ LeadRadar uses **two** Google API keys. Mixing them up or using browser restrict
 
 | Variable | Where | Used for |
 |----------|-------|----------|
-| `GOOGLE_PLACES_API_KEY` | Vercel + `.env.local` (server only) | Search tab, `/api/search`, `/api/geocode`, Places API |
+| `GOOGLE_PLACES_API_KEY` | Vercel + `.env.local` (server only) | Search tab, `/api/search`, `/api/geocode`, `/api/places/autocomplete`, Places API |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Vercel + `.env.local` (public) | Map tab, Maps JavaScript in the browser |
 
 ## 1. Enable APIs (Google Cloud Console)
@@ -41,7 +41,7 @@ Copy into Vercel → **Settings → Environment Variables** → `GOOGLE_PLACES_A
   - `https://www.leadradar.us/*`
   - `https://leadradar.us/*`
   - `http://localhost:3000/*`
-- **API restrictions**: Maps JavaScript API (+ Geocoding API if Map tab geocodes client-side)
+- **API restrictions**: Maps JavaScript API (+ Geocoding API + Places API if Map tab geocodes or resolves place details client-side)
 
 Copy into Vercel → `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`.
 
@@ -68,9 +68,21 @@ curl "https://maps.googleapis.com/maps/api/geocode/json?address=Perth&key=YOUR_S
 
 ## 5. Verify production
 
-1. Open https://www.leadradar.us/search
-2. Search city **Perth**, type **Restaurant**
-3. Should return prospects (no geocoding error)
+1. Open https://www.leadradar.us/map-search
+2. Type **perth** in the city field — suggestions like **Perth WA, Australia** should appear
+3. Select a suggestion and click **Search** — map centers and prospects load
+4. Open https://www.leadradar.us/search — same autocomplete on the location field
+
+## 6. Place autocomplete (`/api/places/autocomplete`)
+
+City/area suggestions on **Map Search** and **Search** use the legacy **Places Autocomplete API** via `GET /api/places/autocomplete?input=...&language=...`.
+
+Requirements on **Key A** (`GOOGLE_PLACES_API_KEY`):
+
+- **Places API** enabled (same as nearby business search)
+- No HTTP referrer restriction (server-side route)
+
+If autocomplete fails with `REQUEST_DENIED`, enable Places API on the server key and redeploy.
 
 ## Common mistakes
 

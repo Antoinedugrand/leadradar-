@@ -15,12 +15,13 @@ import {
 } from "lucide-react";
 
 import { AuditAllButton } from "@/components/audit-all-button";
+import { CityPlaceAutocomplete } from "@/components/app/city-place-autocomplete";
 import { MapAiDraftCard } from "@/components/app/map-ai-draft-card";
 import { MapMiniStat } from "@/components/app/map-mini-stat";
 import { MapProspectRow } from "@/components/app/map-prospect-row";
 import { MapZoneCard } from "@/components/app/map-zone-card";
 import { LOCALE_BCP47, PLACE_TYPE_VALUES, placeTypeLabel } from "@/lib/i18n";
-import { geocodeStatusToMessageKey, geocodeWithGoogleMaps, reverseGeocodeCity } from "@/lib/google-maps/client-geocode";
+import { geocodePlaceById, geocodeStatusToMessageKey, geocodeWithGoogleMaps, reverseGeocodeCity } from "@/lib/google-maps/client-geocode";
 import { placesSearchErrorMessageKey, searchPlacesInArea } from "@/lib/google-maps/client-places-search";
 import { normalizeLocationQuery, radiusKmForCityBounds } from "@/lib/geo-search";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -161,6 +162,7 @@ export function MapSearchClient({ mapsApiKey }: MapSearchClientProps) {
   const [center, setCenter] = useState(defaultCenter);
   const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS_KM);
   const [locationQuery, setLocationQuery] = useState("");
+  const selectedPlaceIdRef = useRef<string | null>(null);
   const [selectedPlaceType, setSelectedPlaceType] = useState<string>("restaurant");
   const [message, setMessage] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -321,12 +323,20 @@ export function MapSearchClient({ mapsApiKey }: MapSearchClientProps) {
 
   async function geocodeCity(
     query: string,
+    placeId?: string | null,
   ): Promise<
     | { ok: true; location: { lat: number; lng: number }; radiusKm: number }
     | { ok: false; message: string }
   > {
-    const normalizedQuery = normalizeLocationQuery(query);
-    const clientOutcome = await geocodeWithGoogleMaps(normalizedQuery, locale);
+    let clientOutcome;
+
+    const map = mapRef.current;
+    if (placeId && map && isLoaded) {
+      clientOutcome = await geocodePlaceById(map, placeId);
+    } else {
+      const normalizedQuery = normalizeLocationQuery(query);
+      clientOutcome = await geocodeWithGoogleMaps(normalizedQuery, locale);
+    }
 
     if (!clientOutcome.ok) {
       const messageKey = geocodeStatusToMessageKey(clientOutcome.status);
@@ -341,7 +351,6 @@ export function MapSearchClient({ mapsApiKey }: MapSearchClientProps) {
     setCenter(location);
     setRadiusKm(nextRadiusKm);
 
-    const map = mapRef.current;
     if (map) {
       if (box?.northeast && box?.southwest) {
         const bounds = new google.maps.LatLngBounds(
@@ -365,7 +374,7 @@ export function MapSearchClient({ mapsApiKey }: MapSearchClientProps) {
     setIsGeocoding(true);
     setMessage(null);
     try {
-      const geocoded = await geocodeCity(locationQuery);
+      const geocoded = await geocodeCity(locationQuery, selectedPlaceIdRef.current);
       if (!geocoded.ok) {
         setMessage(geocoded.message);
         return;
@@ -644,18 +653,20 @@ export function MapSearchClient({ mapsApiKey }: MapSearchClientProps) {
                 <label htmlFor="map-city" className="lr-label">
                   {t("map.locationLabel")}
                 </label>
-                <div className="lr-input-group">
-                  <span className="lr-input-ico">
-                    <Search size={13} />
-                  </span>
-                  <input
-                    id="map-city"
-                    className="lr-input"
-                    value={locationQuery}
-                    onChange={(event) => setLocationQuery(event.target.value)}
-                    placeholder={t("map.locationPlaceholderShort")}
-                  />
-                </div>
+                <CityPlaceAutocomplete
+                  id="map-city"
+                  value={locationQuery}
+                  onChange={(nextValue) => {
+                    setLocationQuery(nextValue);
+                    selectedPlaceIdRef.current = null;
+                  }}
+                  onSelect={(selection) => {
+                    selectedPlaceIdRef.current = selection.placeId;
+                  }}
+                  placeholder={t("map.locationPlaceholderShort")}
+                  disabled={!isLoaded || Boolean(loadError)}
+                  icon={<Search size={13} />}
+                />
                 <p className="lr-hint">{t("map.cityHint")}</p>
                 <button
                   type="submit"
