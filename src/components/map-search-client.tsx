@@ -121,6 +121,7 @@ interface MapSearchClientProps {
 interface AreaSearchPayload {
   message?: string;
   error?: string;
+  details?: string;
   count?: number;
   data?: MapProspect[];
   prospects?: Prospect[];
@@ -419,7 +420,8 @@ export function MapSearchClient({ mapsApiKey }: MapSearchClientProps) {
           });
           payload = (await ingestResponse.json()) as AreaSearchPayload;
           if (!ingestResponse.ok) {
-            setMessage(payload?.error ?? t("map.areaSearchError"));
+            const detail = payload?.details ? ` (${payload.details})` : "";
+            setMessage(`${payload?.error ?? t("map.areaSearchError")}${detail}`);
             return;
           }
         } else {

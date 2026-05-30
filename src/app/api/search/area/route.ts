@@ -159,7 +159,10 @@ export async function POST(request: Request) {
         .from("prospects")
         .upsert(prospectsToSave, { onConflict: "user_id,google_place_id" });
       if (error) {
-        return NextResponse.json({ error: "Erreur Supabase pendant la sauvegarde." }, { status: 500 });
+        return NextResponse.json(
+          { error: "Erreur Supabase pendant la sauvegarde.", details: error.message },
+          { status: 500 },
+        );
       }
 
       const placeIds = Array.from(uniquePlaceIds);

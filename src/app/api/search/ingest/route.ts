@@ -126,10 +126,16 @@ export async function POST(request: Request) {
           .from("prospects")
           .upsert(fallbackRows, { onConflict: "user_id,google_place_id" });
         if (fallbackError) {
-          return NextResponse.json({ error: "Erreur Supabase pendant la sauvegarde." }, { status: 500 });
+          return NextResponse.json(
+            { error: "Erreur Supabase pendant la sauvegarde.", details: fallbackError.message },
+            { status: 500 },
+          );
         }
       } else {
-        return NextResponse.json({ error: "Erreur Supabase pendant la sauvegarde." }, { status: 500 });
+        return NextResponse.json(
+          { error: "Erreur Supabase pendant la sauvegarde.", details: error.message },
+          { status: 500 },
+        );
       }
     }
 
