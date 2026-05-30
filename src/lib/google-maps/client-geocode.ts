@@ -129,7 +129,7 @@ export async function geocodePlaceById(
       { placeId, fields: ["geometry", "formatted_address", "name"] },
       (place, status) => {
         if (status !== google.maps.places.PlacesServiceStatus.OK || !place?.geometry?.location) {
-          resolve({ ok: false, status });
+          resolve({ ok: false, status: String(status) });
           return;
         }
 
@@ -138,7 +138,6 @@ export async function geocodePlaceById(
           ok: true,
           result: {
             location: { lat: location.lat(), lng: location.lng() },
-            bounds: place.geometry.bounds ? boundsFromGoogle(place.geometry.bounds) : undefined,
             viewport: place.geometry.viewport ? boundsFromGoogle(place.geometry.viewport) : undefined,
             formattedAddress: place.formatted_address,
           },
